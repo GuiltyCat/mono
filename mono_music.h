@@ -1,3 +1,5 @@
+#define __USE_MISC
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,7 +14,7 @@ typedef struct {
 } Wav;
 
 Wav *WavInit(size_t len) {
-  Wav *wav = malloc(sizeof(Wav) + sizeof(int16_t) * len);
+  Wav *wav = (Wav *)malloc(sizeof(Wav) + sizeof(int16_t) * len);
   if (wav == NULL) {
     return NULL;
   }
@@ -125,4 +127,125 @@ int WavWrite(FILE *fp, Wav *wav) {
   }
 
   return 0;
+}
+
+int16_t *test_sine(int16_t *wave, size_t len, double amp, double freq,
+                   uint32_t sampling_freq) {
+  for (size_t i = 0; i < len; i++) {
+    double s = amp * sin(2 * M_PI * i * freq / sampling_freq);
+    wave[i] = (int16_t)s;
+  }
+  return wave;
+}
+
+int WavTest(void) {
+  FILE *fp = fopen("test.wav", "wb");
+  if (fp == NULL) {
+    perror("fp == NULL");
+    return -1;
+  }
+
+  size_t length = 1000000;
+  Wav *wav = WavInit(length);
+  if (wav == NULL) {
+    perror("wav == NULL");
+    return -1;
+  }
+
+  test_sine(wav->signal, wav->length, 2000.0, 230, wav->sampling_freq);
+
+  WavWrite(fp, wav);
+
+  fclose(fp);
+
+  return 0;
+}
+
+size_t read_line(FILE *fp, uint8_t *line, size_t num) {
+  size_t count = 0;
+  int c;
+  while ((c = fgetc(fp)) != EOF) {
+    if (c == '\n') {
+      break;
+    }
+    if (num <= count) {
+      break;
+    }
+    printf("%c\n", c);
+    line[count] = c;
+    count++;
+  }
+  return count;
+}
+
+bool make_sound(Wav *wav, size_t start, size_t end, double amp, double freq) {
+  size_t count = 0;
+  for (size_t i = start; i < end; i++) {
+    wav->signal[i] = amp * sin(2 * M_PI * count * freq / wav->sampling_freq);
+    // printf("%zu:%u, ", i, wav->signal[i]);
+    count++;
+  }
+  return true;
+}
+
+bool parse_line(Wav *wav, size_t start, size_t end, uint8_t *line, size_t num) {
+  printf("start, end = %zu, %zu\n", start, end);
+  for (size_t i = 0; i < num; i++) {
+    switch (line[i]) {
+    case 'A':
+    case 'a':
+      make_sound(wav, start, end, 430, 440);
+      break;
+    case 'B':
+    case 'b':
+      make_sound(wav, start, end, 430, 493.88);
+      break;
+    case 'C':
+    case 'c':
+      make_sound(wav, start, end, 430, 523.25);
+      break;
+    case 'D':
+    case 'd':
+      make_sound(wav, start, end, 430, 587.33);
+      break;
+    case 'E':
+    case 'e':
+      make_sound(wav, start, end, 430, 659.26);
+      break;
+    case 'F':
+    case 'f':
+      make_sound(wav, start, end, 430, 698.46);
+      break;
+    case 'G':
+    case 'g':
+      make_sound(wav, start, end, 430, 783.99);
+      break;
+    }
+  }
+  return true;
+}
+
+bool play_sheet(FILE *fp) {
+
+  Wav *wav = WavInit(100000 * 100);
+  uint8_t line[500];
+  size_t one_beat = 100000;
+  size_t i = 0;
+  for (;;) {
+    printf("in.\n");
+    size_t num = read_line(fp, line, 500);
+    if (num == 0) {
+      break;
+    }
+    parse_line(wav, i * one_beat, (i + 1) * one_beat, line, num);
+    i++;
+  }
+  FILE *wfp = fopen("test_music.wav", "wb");
+  if (wfp == NULL) {
+    perror("test_music.wav open failed.");
+    return false;
+  }
+  WavWrite(wfp, wav);
+  fclose(wfp);
+  return true;
 }
