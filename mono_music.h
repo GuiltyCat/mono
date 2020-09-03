@@ -2,7 +2,6 @@
 #define MONO_MUSIC_H_
 #include <stdbool.h>
 
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,8 +24,6 @@ int16_t* test_sine(int16_t* wave,
                    double freq,
                    uint32_t sampling_freq);
 
-int WavTest(void);
-
 size_t read_line(FILE* fp, uint8_t* line, size_t num);
 bool make_sound(Wav* wav, size_t start, size_t end, double amp, double freq);
 
@@ -38,4 +35,5 @@ bool parse_line(Wav* wav, size_t start, size_t end, uint8_t* line, size_t num);
 
 bool parse_mono_music(FILE* fp);
 bool play_sheet(FILE* fp);
+bool WaveTest(void);
 #endif

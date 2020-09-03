@@ -1,12 +1,14 @@
 #include "mono_image.h"
 #include "mono_music.h"
 int main(void) {
+  WaveTest();
+  return 0;
+
   test_note_freq();
   return 0;
   puts("ok");
   ImageTest();
   puts("ok");
-  WavTest();
   puts("ok");
 
   FILE* fp = fopen("test_music.mono", "r");
@@ -20,5 +22,6 @@ int main(void) {
   puts("ok");
   fclose(fp);
   puts("ok");
+
   return 0;
 }
