@@ -194,7 +194,3 @@ void ImageTest(void) {
   fclose(fp);
   return;
 }
-int main(void) {
-  ImageTest();
-  return 0;
-}
