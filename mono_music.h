@@ -36,4 +36,5 @@ bool parse_line(Wav* wav, size_t start, size_t end, uint8_t* line, size_t num);
 bool parse_mono_music(FILE* fp);
 bool play_sheet(FILE* fp);
 bool WaveTest(void);
+void parse_test(void);
 #endif

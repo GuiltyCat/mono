@@ -1,6 +1,5 @@
 #include "mono_music.h"
 #include <math.h>
-#define M_PI 3.14159265358979323846
 
 size_t sec_to_length(double sec, uint32_t sampling_freq) {
   return sec * sampling_freq;
@@ -142,14 +141,6 @@ size_t read_line(FILE* fp, uint8_t* line, size_t num) {
   }
   return count;
 }
-bool make_sound(Wav* wav, size_t start, size_t end, double amp, double freq) {
-  size_t count = 0;
-  for (size_t i = start; i < end; i++) {
-    wav->signal[i] = amp * sin(2 * M_PI * count * freq / wav->sampling_freq);
-    count++;
-  }
-  return true;
-}
 
 int note_to_num(uint8_t note, uint8_t shift) {
   /* C4 D4 E4 F4 G4 A4 B4 */
@@ -204,6 +195,7 @@ double base_freq_equal_temptation(int num, double A4) {
 }
 
 double note_to_freq(uint8_t note, uint8_t acc, int8_t octave, double A4) {
+  printf("note=%c, acc=%c, octave=%d, A4=%f\n", note, acc, octave, A4);
   return octave_shift(base_freq_equal_temptation(note_to_num(note, acc), A4),
                       octave - 4);
 }
@@ -218,95 +210,6 @@ void test_note_freq(void) {
     }
   }
 }
-
-bool parse_line(Wav* wav, size_t start, size_t end, uint8_t* line, size_t num) {
-  printf("start, end = %zu, %zu\n", start, end);
-  for (size_t i = 0; i < num; i++) {
-    switch (line[i]) {
-      case 'A':
-      case 'a':
-        make_sound(wav, start, end, 430, 440);
-        break;
-      case 'B':
-      case 'b':
-        make_sound(wav, start, end, 430, 493.88);
-        break;
-      case 'C':
-      case 'c':
-        make_sound(wav, start, end, 430, 523.25);
-        break;
-      case 'D':
-      case 'd':
-        make_sound(wav, start, end, 430, 587.33);
-        break;
-      case 'E':
-      case 'e':
-        make_sound(wav, start, end, 430, 659.26);
-        break;
-      case 'F':
-      case 'f':
-        make_sound(wav, start, end, 430, 698.46);
-        break;
-      case 'G':
-      case 'g':
-        make_sound(wav, start, end, 430, 783.99);
-        break;
-    }
-  }
-  return true;
-}
-bool play_sheet(FILE* fp) {
-  Wav* wav = WavInit(10);
-  uint8_t line[500];
-  size_t one_beat = 100000;
-  size_t i = 0;
-  for (;;) {
-    printf("in.\n");
-    size_t num = read_line(fp, line, 500);
-    if (num == 0) {
-      break;
-    }
-    parse_line(wav, i * one_beat, (i + 1) * one_beat, line, num);
-    i++;
-  }
-  FILE* wfp = fopen("test_music.wav", "wb");
-  if (wfp == NULL) {
-    perror("test_music.wav open failed.");
-    return false;
-  }
-  WavWrite(wfp, wav);
-  fclose(wfp);
-  return true;
-}
-
-/*
- *
- * - Music: Single wave
- * - Wave : Recursive addition of waves
- * - Wave :
- *   - Volume(Amplitude) change
- *   - Frequency change
- *   - Shape change
- * - Change:
- *   - Wave
- *   - Linear
- *   - Exponent
- *   - Log
- *
- * Leaf of Wave means constant frequency that has constant value.
- * Parent of leaf node is basic wave like sine the frequency is leaf node.
- *
- * General form of wave is
- * wave_amp * wave( wave_freq )
- * wave_amp and wave_freq are also wave.
- *
- * And more wave should start and end.
- * start and end are occured when triggered.
- * trigger is defined by the number of period.
- * in each period, trigger is called.
- * when the pre-defined number of trigger is called.
- * wave start and end.
- */
 
 struct List;
 typedef struct List List;
@@ -337,6 +240,13 @@ void ListFree(List* l) {
     ListFree(next);
   }
   return;
+}
+
+List* ListAdd(List* node, Wave* wave) {
+  List* next = ListInit();
+  next->wave = wave;
+  node->next = next;
+  return next;
 }
 
 struct Wave {
@@ -388,12 +298,8 @@ bool WaveTest(void) {
   size_t sampling_freq = 80000;
   Wave* w = WaveInit(440, sampling_freq);
   for (size_t i = 0; i < sec * sampling_freq; i++) {
-    // break;
-    //double next = 10000 * (1.0-WaveNext(w));
     double next = 10000 * WaveNext(w);
     wav->signal[i] = next;
-    // printf("%d,",wav->signal[i]);
-    //printf("%f,", next);
   }
 
   WaveFree(w);
@@ -402,4 +308,120 @@ bool WaveTest(void) {
 
   fclose(fp);
   return true;
+}
+
+uint8_t parse_note(FILE* fp) {
+  int c;
+  while ((c = fgetc(fp)) != EOF) {
+    switch (c) {
+      case 'a':
+      case 'A':
+      case 'b':
+      case 'B':
+      case 'c':
+      case 'C':
+      case 'd':
+      case 'D':
+      case 'e':
+      case 'E':
+      case 'f':
+      case 'F':
+      case 'g':
+      case 'G':
+        return c;
+      default:
+        perror("Such value is not permitted.");
+        break;
+    }
+  }
+  return 0;
+}
+
+uint8_t parse_octave(FILE* fp) {
+  int c;
+  while ((c = fgetc(fp)) != EOF) {
+    switch (c) {
+      case '0':
+        return 0;
+      case '1':
+        return 1;
+      case '2':
+        return 2;
+      case '3':
+        return 3;
+      case '4':
+        return 4;
+      case '5':
+        return 5;
+      case '6':
+        return 6;
+      case '7':
+        return 7;
+      case '8':
+        return 8;
+      default:
+        perror("Such value is not permitted.");
+    }
+  }
+  perror("cannot reach here.");
+  exit(-1);
+}
+
+List* parse_sheet(FILE* fp, uint32_t sampling_freq) {
+  List* head = ListInit();
+  List* next = head;
+  for (;;) {
+    if (feof(fp)) {
+      break;
+    }
+    uint8_t note = parse_note(fp);
+    if (note == 0) {
+      break;
+    }
+    uint8_t oct = parse_octave(fp);
+    double freq = note_to_freq(note, ' ', oct, 440);
+    Wave* w = WaveInit(freq, sampling_freq);
+    next = ListAdd(next, w);
+    // WaveFree(w);
+    printf("freq=%f\n", freq);
+  }
+  return head;
+}
+
+bool ListToWav(FILE* fp, List* l) {
+  uint32_t sampling_freq = 80000;
+  double sec = 100;
+  Wav* wav = WavInit(sec);
+  if (wav == NULL) {
+    return false;
+  }
+  size_t i = 0;
+  for (List* next = l; next != NULL; next = next->next) {
+    for (size_t j = 0; j < sampling_freq; j++) {
+      // printf("%lu:%lu\n", i, j);
+      if (next->wave)
+        wav->signal[i++] = 10000 * WaveNext(next->wave);
+    }
+  }
+  WavWrite(fp, wav);
+  WavFree(wav);
+  return true;
+}
+void parse_test(void) {
+  FILE* fp = fopen("test_music.mono", "r");
+  if (fp == NULL) {
+    perror("open failed");
+    return;
+  }
+  List* l = parse_sheet(fp, 80000);
+  fclose(fp);
+  fp = fopen("test.wav", "w");
+  if (fp == NULL) {
+    perror("write open failed.");
+    exit(-1);
+  }
+  ListToWav(fp, l);
+  fclose(fp);
+  ListFree(l);
+  return;
 }

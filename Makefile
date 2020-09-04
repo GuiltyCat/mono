@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-std=c17 -O3 -Wall -Wextra -pedantic -I./
+CFLAGS=-std=c17 -g -O0 -Wall -Wextra -pedantic -I./
 
 LDFLAGS=-lm
 

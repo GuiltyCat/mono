@@ -1,6 +1,8 @@
 #include "mono_image.h"
 #include "mono_music.h"
 int main(void) {
+	parse_test();
+	return 0;
   WaveTest();
   return 0;
 
