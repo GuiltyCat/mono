@@ -7,15 +7,15 @@ size_t sec_to_length(double sec, uint32_t sampling_freq) {
 
 Wav* WavInit(double sec) {
   const uint32_t sampling_freq = 80000;
-  size_t len = sec_to_length(sec, sampling_freq);
-  Wav* wav = (Wav*)malloc(sizeof(Wav) + sizeof(int16_t) * len);
+  size_t         len           = sec_to_length(sec, sampling_freq);
+  Wav*           wav = (Wav*)malloc(sizeof(Wav) + sizeof(int16_t) * len);
   if (wav == NULL) {
     return NULL;
   }
-  wav->bit_size = 16;
-  wav->nchannel = 1;
+  wav->bit_size      = 16;
+  wav->nchannel      = 1;
   wav->sampling_freq = sampling_freq;
-  wav->length = len;
+  wav->length        = len;
   return wav;
 }
 
@@ -45,8 +45,8 @@ int WavWrite(FILE* fp, Wav* wav) {
   // printf("chunk_size=%d\n", chunk_size);
 
   /* Format */
-  header[8] = 'W';
-  header[9] = 'A';
+  header[8]  = 'W';
+  header[9]  = 'A';
   header[10] = 'V';
   header[11] = 'E';
 
@@ -115,7 +115,7 @@ int WavWrite(FILE* fp, Wav* wav) {
   }
 
   size_t nmemb = wav->length * wav->bit_size / 8;
-  ret = fwrite(wav->signal, sizeof(uint8_t), nmemb, fp);
+  ret          = fwrite(wav->signal, sizeof(uint8_t), nmemb, fp);
   // printf("nmemb = %lu.\n", nmemb);
   if (ret != nmemb) {
     perror("bit_size == 8. fwrite failed.");
@@ -127,7 +127,7 @@ int WavWrite(FILE* fp, Wav* wav) {
 
 size_t read_line(FILE* fp, uint8_t* line, size_t num) {
   size_t count = 0;
-  int c;
+  int    c;
   while ((c = fgetc(fp)) != EOF) {
     if (c == '\n') {
       break;
@@ -147,42 +147,28 @@ int note_to_num(uint8_t note, uint8_t shift) {
   int chromatic = 0;
   switch (shift) {
     // case '-':
-    case 'b':
-      chromatic = -1;
-      break;
+    case 'b': chromatic = -1; break;
     // case '+':
-    case '#':
-      chromatic = 1;
-      break;
+    case '#': chromatic = 1; break;
     case ' ':
-    default:
-      chromatic = 0;
+    default: chromatic = 0;
   }
   switch (note) {
     case 'C':
-    case 'c':
-      return -9 + chromatic;
+    case 'c': return -9 + chromatic;
     case 'D':
-    case 'd':
-      return -7 + chromatic;
+    case 'd': return -7 + chromatic;
     case 'E':
-    case 'e':
-      return -5 + chromatic;
+    case 'e': return -5 + chromatic;
     case 'F':
-    case 'f':
-      return -4 + chromatic;
+    case 'f': return -4 + chromatic;
     case 'G':
-    case 'g':
-      return -2 + chromatic;
+    case 'g': return -2 + chromatic;
     case 'A':
-    case 'a':
-      return 0 + chromatic;
+    case 'a': return 0 + chromatic;
     case 'B':
-    case 'b':
-      return 2 + chromatic;
-    default:
-      perror("Error");
-      exit(-1);
+    case 'b': return 2 + chromatic;
+    default: perror("Error"); exit(-1);
   }
 }
 
@@ -218,15 +204,15 @@ typedef struct Wave Wave;
 
 struct List {
   size_t i;
-  List* next;
-  Wave* wave;
+  List*  next;
+  Wave*  wave;
 };
 
 List* ListInit(void) {
   List* l = (List*)malloc(sizeof(List));
   l->next = NULL;
   l->wave = NULL;
-  l->i = 0;
+  l->i    = 0;
   return l;
 }
 
@@ -252,7 +238,7 @@ List* ListAdd(List* node, Wave* wave) {
 struct Wave {
   size_t period;
   size_t i;
-  bool trigger;
+  bool   trigger;
 };
 
 Wave* WaveInit(double freq, size_t sampling_freq) {
@@ -260,8 +246,8 @@ Wave* WaveInit(double freq, size_t sampling_freq) {
   if (w == NULL) {
     return NULL;
   }
-  w->period = (double)sampling_freq / freq;
-  w->i = 0;
+  w->period  = (double)sampling_freq / freq;
+  w->i       = 0;
   w->trigger = false;
   return w;
 }
@@ -289,16 +275,16 @@ bool WaveTest(void) {
   }
 
   double sec = 10;
-  Wav* wav = WavInit(sec);
+  Wav*   wav = WavInit(sec);
   if (wav == NULL) {
     perror("wav == NULL");
     return false;
   }
 
   size_t sampling_freq = 80000;
-  Wave* w = WaveInit(440, sampling_freq);
+  Wave*  w             = WaveInit(440, sampling_freq);
   for (size_t i = 0; i < sec * sampling_freq; i++) {
-    double next = 10000 * WaveNext(w);
+    double next    = 10000 * WaveNext(w);
     wav->signal[i] = next;
   }
 
@@ -327,11 +313,8 @@ uint8_t parse_note(FILE* fp) {
       case 'f':
       case 'F':
       case 'g':
-      case 'G':
-        return c;
-      default:
-        perror("Such value is not permitted.");
-        break;
+      case 'G': return c;
+      default: perror("Such value is not permitted."); break;
     }
   }
   return 0;
@@ -341,26 +324,16 @@ uint8_t parse_octave(FILE* fp) {
   int c;
   while ((c = fgetc(fp)) != EOF) {
     switch (c) {
-      case '0':
-        return 0;
-      case '1':
-        return 1;
-      case '2':
-        return 2;
-      case '3':
-        return 3;
-      case '4':
-        return 4;
-      case '5':
-        return 5;
-      case '6':
-        return 6;
-      case '7':
-        return 7;
-      case '8':
-        return 8;
-      default:
-        perror("Such value is not permitted.");
+      case '0': return 0;
+      case '1': return 1;
+      case '2': return 2;
+      case '3': return 3;
+      case '4': return 4;
+      case '5': return 5;
+      case '6': return 6;
+      case '7': return 7;
+      case '8': return 8;
+      default: perror("Such value is not permitted.");
     }
   }
   perror("cannot reach here.");
@@ -378,10 +351,10 @@ List* parse_sheet(FILE* fp, uint32_t sampling_freq) {
     if (note == 0) {
       break;
     }
-    uint8_t oct = parse_octave(fp);
-    double freq = note_to_freq(note, ' ', oct, 440);
-    Wave* w = WaveInit(freq, sampling_freq);
-    next = ListAdd(next, w);
+    uint8_t oct  = parse_octave(fp);
+    double  freq = note_to_freq(note, ' ', oct, 440);
+    Wave*   w    = WaveInit(freq, sampling_freq);
+    next         = ListAdd(next, w);
     // WaveFree(w);
     printf("freq=%f\n", freq);
   }
@@ -390,8 +363,8 @@ List* parse_sheet(FILE* fp, uint32_t sampling_freq) {
 
 bool ListToWav(FILE* fp, List* l) {
   uint32_t sampling_freq = 80000;
-  double sec = 100;
-  Wav* wav = WavInit(sec);
+  double   sec           = 100;
+  Wav*     wav           = WavInit(sec);
   if (wav == NULL) {
     return false;
   }
@@ -423,5 +396,81 @@ void parse_test(void) {
   ListToWav(fp, l);
   fclose(fp);
   ListFree(l);
+  return;
+}
+
+typedef struct Node0      Node0;
+typedef struct List0      List0;
+typedef struct MonoMusic0 MonoMusic0;
+
+struct Node0 {
+  /* all value is converted to integer by sampling freq */
+  size_t start;  /* absolute */
+  size_t period; /* absolute */
+  size_t length; /* absolute */
+  double volume; /* absolute */
+};
+
+struct List0 {
+  /* all node should be ordered by start */
+  List0* next;
+  Node0* node;
+};
+
+struct MonoMusic0 {
+  size_t sampling_freq;
+  List0* list;
+};
+
+#define PRINT_ERROR printf("%s:%s:%d\n", __FILE__, __func__, __LINE__)
+
+double ctod(int c) {
+  switch (c) {}
+}
+
+double read_float(FILE* fp) {
+  double f     = 0;
+  double times = 10;
+  int    c;
+  while ((c = fgetc(fp)) != EOF) {
+    double num;
+    switch (c) {
+      case '\n': continue;
+      case '\r': continue;
+      case ' ': continue;
+      case '0': num = 0; break;
+      case '1': num = 1; break;
+      case '2': num = 2; break;
+      case '3': num = 3; break;
+      case '4': num = 4; break;
+      case '5': num = 5; break;
+      case '6': num = 6; break;
+      case '7': num = 7; break;
+      case '8': num = 8; break;
+      case '9': num = 9; break;
+      case '.': num = 4; break;
+      default: PRINT_ERROR;
+    }
+  }
+}
+
+MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
+  int c;
+  while ((c = fgetc(fp)) != EOF) {
+    switch (c) {
+      case '\n': continue;
+      case '\r': continue;
+      case ' ': continue;
+      case 's':
+      case 'p':
+      case 'l':
+      case 'v':
+      default: PRINT_ERROR;
+    }
+  }
+  return NULL;
+}
+
+void mono_music0_play(MonoMusic0* m) {
   return;
 }
