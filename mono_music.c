@@ -417,60 +417,147 @@ struct List0 {
   Node0* node;
 };
 
+List0* List0Insert(List0* l, Node0* node) {
+  List0* next = malloc(sizeof(List0));
+  if (next == NULL) {
+    return NULL;
+  }
+  next->node = node;
+  if (l == NULL) {
+    next->next = NULL;
+    return next;
+  } else {
+    next->next = l->next;
+    l->next    = next;
+  }
+  return next;
+}
+
 struct MonoMusic0 {
   size_t sampling_freq;
-  List0* list;
+  size_t max_volume;
+  List0* head;
+  List0* tail;
 };
 
 #define PRINT_ERROR printf("%s:%s:%d\n", __FILE__, __func__, __LINE__)
 
-double ctod(int c) {
-  switch (c) {}
+size_t read_int_with_times(FILE* fp, int times) {
+  size_t num = 0;
+  int    c;
+  while ((c = fgetc(fp)) != EOF) {
+    switch (c) {
+      case '\n': continue;
+      case '\r': continue;
+      case ' ': continue;
+      case '0': num += 0; break;
+      case '1': num += 1; break;
+      case '2': num += 2; break;
+      case '3': num += 3; break;
+      case '4': num += 4; break;
+      case '5': num += 5; break;
+      case '6': num += 6; break;
+      case '7': num += 7; break;
+      case '8': num += 8; break;
+      case '9': num += 9; break;
+      default: ungetc(c, fp); return num;
+    }
+    num *= times;
+  }
+  return num;
 }
 
 double read_float(FILE* fp) {
-  double f     = 0;
-  double times = 10;
+  size_t i = read_int_with_times(fp, 10);
+  int    c = fgetc(fp);
+  if (c == EOF || c != '.') {
+    return i;
+  }
+  size_t f = read_int_with_times(fp, 0.1);
+  return i + f;
+}
+
+Node0* Node0Init(double s,
+                 double p,
+                 double l,
+                 double v,
+                 size_t sampling_freq,
+                 size_t max_volume) {
+  Node0* n = malloc(sizeof(Node0));
+  if (n == NULL) {
+    PRINT_ERROR;
+    return false;
+  }
+  n->start  = s * sampling_freq;
+  n->period = sampling_freq / p;
+  n->length = l * sampling_freq;
+  n->volume = max_volume * v;
+  return n;
+}
+
+bool MonoMusic0Insert(MonoMusic0* mm0, double s, double p, double l, double v) {
+  if (mm0 == NULL) {
+    PRINT_ERROR;
+    return false;
+  }
+  Node0* n = Node0Init(s, p, l, v, mm0->sampling_freq, mm0->max_volume);
+  if (n == NULL) {
+    PRINT_ERROR;
+    return false;
+  }
+  List0* next = List0Insert(mm0->tail, n);
+  if (next == NULL) {
+    PRINT_ERROR;
+    return false;
+  }
+  if (mm0->head == NULL) {
+    /* in this case mm0->head == mm0->tail */
+    mm0->head = next;
+  }
+  return true;
+}
+
+double read_chunk(FILE* fp, char key) {
   int    c;
   while ((c = fgetc(fp)) != EOF) {
-    double num;
     switch (c) {
       case '\n': continue;
       case '\r': continue;
       case ' ': continue;
-      case '0': num = 0; break;
-      case '1': num = 1; break;
-      case '2': num = 2; break;
-      case '3': num = 3; break;
-      case '4': num = 4; break;
-      case '5': num = 5; break;
-      case '6': num = 6; break;
-      case '7': num = 7; break;
-      case '8': num = 8; break;
-      case '9': num = 9; break;
-      case '.': num = 4; break;
-      default: PRINT_ERROR;
+      default:
+        if (c != key) {
+          PRINT_ERROR;
+        }
+        return read_float(fp);
     }
   }
+  return -1;
 }
 
 MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
-  int c;
-  while ((c = fgetc(fp)) != EOF) {
-    switch (c) {
-      case '\n': continue;
-      case '\r': continue;
-      case ' ': continue;
-      case 's':
-      case 'p':
-      case 'l':
-      case 'v':
-      default: PRINT_ERROR;
-    }
+  MonoMusic0* mm0 = malloc(sizeof(MonoMusic0));
+  if (mm0 == NULL) {
+    return NULL;
   }
-  return NULL;
+  mm0->sampling_freq = sampling_freq;
+  mm0->max_volume = INT16_MAX;
+  for (;;) {
+    if (feof(fp)) {
+      break;
+    }
+    double s = read_chunk(fp, 's');
+    double p = read_chunk(fp, 'p');
+    double l = read_chunk(fp, 'l');
+    double v = read_chunk(fp, 'v');
+    if (s != -1 && p != -1 && l != -1 && v != -1) {
+      MonoMusic0Insert(mm0, s, p, l, v);
+    }
+    (void)read_chunk(fp, ',');
+  }
+  return mm0;
 }
 
 void mono_music0_play(MonoMusic0* m) {
+	(void)m;
   return;
 }
