@@ -1,14 +1,12 @@
 #include "mono_music.h"
 #include <math.h>
+#define M_PI 3.14159265358979323846
 
 size_t sec_to_length(double sec, uint32_t sampling_freq) {
   return sec * sampling_freq;
 }
-
-Wav* WavInit(double sec) {
-  const uint32_t sampling_freq = 80000;
-  size_t         len           = sec_to_length(sec, sampling_freq);
-  Wav*           wav = (Wav*)malloc(sizeof(Wav) + sizeof(int16_t) * len);
+Wav* WavInit(size_t len, size_t sampling_freq) {
+  Wav* wav = (Wav*)calloc(sizeof(Wav) + sizeof(int16_t) * len,1);
   if (wav == NULL) {
     return NULL;
   }
@@ -17,6 +15,12 @@ Wav* WavInit(double sec) {
   wav->sampling_freq = sampling_freq;
   wav->length        = len;
   return wav;
+}
+
+Wav* WavInitSec(double sec) {
+  const uint32_t sampling_freq = 80000;
+  size_t         len           = sec_to_length(sec, sampling_freq);
+  return WavInit(len, sampling_freq);
 }
 
 void WavFree(Wav* wav) {
@@ -254,8 +258,8 @@ Wave* WaveInit(double freq, size_t sampling_freq) {
 void WaveFree(Wave* w) {
   free(w);
 }
-
 double SawtoothWave(Wave* w) {
+  /* saw tooth Wave */
   return (double)w->i / (double)w->period - 0.5;
 }
 
@@ -275,7 +279,7 @@ bool WaveTest(void) {
   }
 
   double sec = 10;
-  Wav*   wav = WavInit(sec);
+  Wav*   wav = WavInitSec(sec);
   if (wav == NULL) {
     perror("wav == NULL");
     return false;
@@ -364,7 +368,7 @@ List* parse_sheet(FILE* fp, uint32_t sampling_freq) {
 bool ListToWav(FILE* fp, List* l) {
   uint32_t sampling_freq = 80000;
   double   sec           = 100;
-  Wav*     wav           = WavInit(sec);
+  Wav*     wav           = WavInitSec(sec);
   if (wav == NULL) {
     return false;
   }
@@ -399,23 +403,33 @@ void parse_test(void) {
   return;
 }
 
-typedef struct Node0      Node0;
-typedef struct List0      List0;
-typedef struct MonoMusic0 MonoMusic0;
+double Zwave(Node0* n) {
+  /* saw tooth Node0 */
+  return (double)n->i / (double)n->period - 0.5;
+}
+double Swave(Node0* n) {
+  /* sine wave */
+  return (double)sin(2 * M_PI * n->i / n->period);
+}
+double Pwave(Node0* n) {
+  (void)n;
+  /* pulse wave */
+  // return n->i <= n->period * n->p
+  return 0;
+}
+double Twave(Node0* n) {
+  /* triangle wave */
+  (void)n;
+  return 0;
+}
 
-struct Node0 {
-  /* all value is converted to integer by sampling freq */
-  size_t start;  /* absolute */
-  size_t period; /* absolute */
-  size_t length; /* absolute */
-  double volume; /* absolute */
-};
-
-struct List0 {
-  /* all node should be ordered by start */
-  List0* next;
-  Node0* node;
-};
+double Node0Next(Node0* n) {
+  n->i %= n->period;
+  double ret = n->volume * Zwave(n);
+  // double ret = n->wave(n);
+  n->i++;
+  return ret;
+}
 
 List0* List0Insert(List0* l, Node0* node) {
   List0* next = malloc(sizeof(List0));
@@ -433,19 +447,14 @@ List0* List0Insert(List0* l, Node0* node) {
   return next;
 }
 
-struct MonoMusic0 {
-  size_t sampling_freq;
-  size_t max_volume;
-  List0* head;
-  List0* tail;
-};
-
 #define PRINT_ERROR printf("%s:%s:%d\n", __FILE__, __func__, __LINE__)
-
-size_t read_int_with_times(FILE* fp, int times) {
-  size_t num = 0;
+double read_float(FILE* fp) {
+  double num = 0;
+  bool   f   = false;
+  int    fc  = 0;
   int    c;
   while ((c = fgetc(fp)) != EOF) {
+    // printf("c=%c\n", c);
     switch (c) {
       case '\n': continue;
       case '\r': continue;
@@ -460,22 +469,57 @@ size_t read_int_with_times(FILE* fp, int times) {
       case '7': num += 7; break;
       case '8': num += 8; break;
       case '9': num += 9; break;
-      default: ungetc(c, fp); return num;
+      case '.': f = true; break;
+      default: ungetc(c, fp); return num / pow(10.0, fc + 1);
     }
-    num *= times;
+    num *= 10;
+    if (f) {
+      fc++;
+    }
+    // printf("num=%f, fc=%d\n",num,fc);
   }
-  return num;
+  // PRINT_ERROR;
+  return num / pow(10.0, fc);
 }
 
-double read_float(FILE* fp) {
-  size_t i = read_int_with_times(fp, 10);
-  int    c = fgetc(fp);
-  if (c == EOF || c != '.') {
-    return i;
-  }
-  size_t f = read_int_with_times(fp, 0.1);
-  return i + f;
-}
+// double read_int_with_times(FILE* fp, double times) {
+//  double num = 0;
+//  int    c;
+//  while ((c = fgetc(fp)) != EOF) {
+//	  printf("c=%c\n",c);
+//    switch (c) {
+//      case '\n': continue;
+//      case '\r': continue;
+//      case ' ': continue;
+//      case '0': num += 0; break;
+//      case '1': num += 1; break;
+//      case '2': num += 2; break;
+//      case '3': num += 3; break;
+//      case '4': num += 4; break;
+//      case '5': num += 5; break;
+//      case '6': num += 6; break;
+//      case '7': num += 7; break;
+//      case '8': num += 8; break;
+//      case '9': num += 9; break;
+//      default: ungetc(c, fp); return num/10.0;
+//    }
+//    num *= times;
+//  }
+//  PRINT_ERROR;
+//  return num;
+//}
+//
+// double read_float(FILE* fp) {
+//  double i = read_int_with_times(fp, 10);
+//  printf("ri = %f\n",i);
+//  int    c = fgetc(fp);
+//  if (c == EOF || c != '.') {
+//    return i;
+//  }
+//  double f = read_int_with_times(fp, 0.1);
+//  printf("rf = %f\n",f);
+//  return i + f;
+//}
 
 Node0* Node0Init(double s,
                  double p,
@@ -492,6 +536,7 @@ Node0* Node0Init(double s,
   n->period = sampling_freq / p;
   n->length = l * sampling_freq;
   n->volume = max_volume * v;
+  n->i      = 0;
   return n;
 }
 
@@ -506,6 +551,7 @@ bool MonoMusic0Insert(MonoMusic0* mm0, double s, double p, double l, double v) {
     return false;
   }
   List0* next = List0Insert(mm0->tail, n);
+  mm0->tail   = next;
   if (next == NULL) {
     PRINT_ERROR;
     return false;
@@ -518,7 +564,7 @@ bool MonoMusic0Insert(MonoMusic0* mm0, double s, double p, double l, double v) {
 }
 
 double read_chunk(FILE* fp, char key) {
-  int    c;
+  int c;
   while ((c = fgetc(fp)) != EOF) {
     switch (c) {
       case '\n': continue;
@@ -527,8 +573,11 @@ double read_chunk(FILE* fp, char key) {
       default:
         if (c != key) {
           PRINT_ERROR;
+          printf("c != key : %c != %c\n", c, key);
         }
-        return read_float(fp);
+        double f = read_float(fp);
+        printf("%c=%f\n", key, f);
+        return f;
     }
   }
   return -1;
@@ -540,7 +589,7 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
     return NULL;
   }
   mm0->sampling_freq = sampling_freq;
-  mm0->max_volume = INT16_MAX;
+  mm0->max_volume    = INT16_MAX;
   for (;;) {
     if (feof(fp)) {
       break;
@@ -557,7 +606,22 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
   return mm0;
 }
 
-void mono_music0_play(MonoMusic0* m) {
-	(void)m;
-  return;
+int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
+  List0* tail = mm0->tail;
+  List0* head = mm0->head;
+  Wav* w = WavInit(tail->node->start + tail->node->length, mm0->sampling_freq);
+  for (List0* l = head; l != NULL; l = l->next) {
+    Node0* n = l->node;
+    printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
+           n->volume);
+    for (size_t i = 0; i < n->length; i++) {
+		//printf("i=%lu\n",n->i);
+      WAV_AT(w, n->start + i) += Node0Next(n);
+      //printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
+    }
+  }
+  putchar('\n');
+  int ret = WavWrite(fp, w);
+  WavFree(w);
+  return ret;
 }
