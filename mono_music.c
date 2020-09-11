@@ -6,7 +6,7 @@ size_t sec_to_length(double sec, uint32_t sampling_freq) {
   return sec * sampling_freq;
 }
 Wav* WavInit(size_t len, size_t sampling_freq) {
-  Wav* wav = (Wav*)calloc(sizeof(Wav) + sizeof(int16_t) * len,1);
+  Wav* wav = (Wav*)calloc(sizeof(Wav) + sizeof(int16_t) * len, 1);
   if (wav == NULL) {
     return NULL;
   }
@@ -403,8 +403,9 @@ void parse_test(void) {
   return;
 }
 
+/* these alphabet do not change appearance by capital */
 double Zwave(Node0* n) {
-  /* saw tooth Node0 */
+  /* saw tooth Wave */
   return (double)n->i / (double)n->period - 0.5;
 }
 double Swave(Node0* n) {
@@ -412,21 +413,25 @@ double Swave(Node0* n) {
   return (double)sin(2 * M_PI * n->i / n->period);
 }
 double Pwave(Node0* n) {
-  (void)n;
   /* pulse wave */
-  // return n->i <= n->period * n->p
-  return 0;
+  /* |--------| n->period
+   * |-----|__| n->midway + (n->period - n->midway) */
+  return n->i <= n->midway ? 1 : -1;
 }
+
 double Twave(Node0* n) {
   /* triangle wave */
-  (void)n;
-  return 0;
+  /* |------| n->length
+   * |///\\\| n->midway + (n->period - n->midway) */
+  return n->i <= n->midway ? (double)n->i / (double)n->midway - 0.5
+                           : 0.5 - (double)(n->period - n->i) /
+                                       (double)(n->period - n->midway);
 }
 
 double Node0Next(Node0* n) {
   n->i %= n->period;
-  double ret = n->volume * Zwave(n);
-  // double ret = n->wave(n);
+  // double ret = n->volume * Zwave(n);
+  double ret = n->volume * n->wave(n);
   n->i++;
   return ret;
 }
@@ -482,46 +487,9 @@ double read_float(FILE* fp) {
   return num / pow(10.0, fc);
 }
 
-// double read_int_with_times(FILE* fp, double times) {
-//  double num = 0;
-//  int    c;
-//  while ((c = fgetc(fp)) != EOF) {
-//	  printf("c=%c\n",c);
-//    switch (c) {
-//      case '\n': continue;
-//      case '\r': continue;
-//      case ' ': continue;
-//      case '0': num += 0; break;
-//      case '1': num += 1; break;
-//      case '2': num += 2; break;
-//      case '3': num += 3; break;
-//      case '4': num += 4; break;
-//      case '5': num += 5; break;
-//      case '6': num += 6; break;
-//      case '7': num += 7; break;
-//      case '8': num += 8; break;
-//      case '9': num += 9; break;
-//      default: ungetc(c, fp); return num/10.0;
-//    }
-//    num *= times;
-//  }
-//  PRINT_ERROR;
-//  return num;
-//}
-//
-// double read_float(FILE* fp) {
-//  double i = read_int_with_times(fp, 10);
-//  printf("ri = %f\n",i);
-//  int    c = fgetc(fp);
-//  if (c == EOF || c != '.') {
-//    return i;
-//  }
-//  double f = read_int_with_times(fp, 0.1);
-//  printf("rf = %f\n",f);
-//  return i + f;
-//}
-
-Node0* Node0Init(double s,
+Node0* Node0Init(char   w,
+                 double m,
+                 double s,
                  double p,
                  double l,
                  double v,
@@ -537,15 +505,29 @@ Node0* Node0Init(double s,
   n->length = l * sampling_freq;
   n->volume = max_volume * v;
   n->i      = 0;
+  switch (w) {
+    case 'Z': n->wave = Zwave; break;
+    case 'S': n->wave = Swave; break;
+    case 'P': n->wave = Pwave; break;
+    case 'T': n->wave = Twave; break;
+    default: PRINT_ERROR; break;
+  }
+  n->midway = n->period * m;
   return n;
 }
 
-bool MonoMusic0Insert(MonoMusic0* mm0, double s, double p, double l, double v) {
+bool MonoMusic0Insert(MonoMusic0* mm0,
+                      char        w,
+                      double      m,
+                      double      s,
+                      double      p,
+                      double      l,
+                      double      v) {
   if (mm0 == NULL) {
     PRINT_ERROR;
     return false;
   }
-  Node0* n = Node0Init(s, p, l, v, mm0->sampling_freq, mm0->max_volume);
+  Node0* n = Node0Init(w, m, s, p, l, v, mm0->sampling_freq, mm0->max_volume);
   if (n == NULL) {
     PRINT_ERROR;
     return false;
@@ -594,12 +576,25 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
     if (feof(fp)) {
       break;
     }
+    int w = fgetc(fp);
+    if (w == EOF) {
+      break;
+    }
+    switch (w) {
+      case 'Z':
+      case 'S':
+      case 'P':
+      case 'T': ungetc(w, fp); break;
+      default: PRINT_ERROR; break;
+    }
+
+    double m = read_chunk(fp, w);
     double s = read_chunk(fp, 's');
     double p = read_chunk(fp, 'p');
     double l = read_chunk(fp, 'l');
     double v = read_chunk(fp, 'v');
     if (s != -1 && p != -1 && l != -1 && v != -1) {
-      MonoMusic0Insert(mm0, s, p, l, v);
+      MonoMusic0Insert(mm0, w, m, s, p, l, v);
     }
     (void)read_chunk(fp, ',');
   }
@@ -615,9 +610,9 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
            n->volume);
     for (size_t i = 0; i < n->length; i++) {
-		//printf("i=%lu\n",n->i);
+      // printf("i=%lu\n",n->i);
       WAV_AT(w, n->start + i) += Node0Next(n);
-      //printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
+      // printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
     }
   }
   putchar('\n');

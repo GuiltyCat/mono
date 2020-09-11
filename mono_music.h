@@ -52,7 +52,8 @@ struct Node0 {
   size_t length; /* absolute */
   double volume; /* absolute */
   size_t i;
-  // double (*wave)(Node0* node);
+  size_t midway; /* used for pulse wave */
+  double (*wave)(Node0* node);
 };
 
 struct List0 {
