@@ -404,10 +404,10 @@ void parse_test(void) {
 }
 
 /* these alphabet do not change appearance by capital */
-double Zwave(Node0* n) {
-  /* saw tooth Wave */
-  return (double)n->i / (double)n->period - 0.5;
-}
+// double Zwave(Node0* n) {
+//   /* saw tooth Wave */
+//   return 2.0*((double)n->i / (double)n->period) - 1.0;
+// }
 double Swave(Node0* n) {
   /* sine wave */
   return (double)sin(2 * M_PI * n->i / n->period);
@@ -423,8 +423,8 @@ double Twave(Node0* n) {
   /* triangle wave */
   /* |------| n->length
    * |///\\\| n->midway + (n->period - n->midway) */
-  return n->i <= n->midway ? (double)n->i / (double)n->midway - 0.5
-                           : 0.5 - (double)(n->period - n->i) /
+  return n->i <= n->midway ? 2.0*((double)n->i / (double)n->midway) - 1.0
+                           : 1.0 - 2.0*(double)(n->period - n->i) /
                                        (double)(n->period - n->midway);
 }
 
@@ -458,8 +458,9 @@ double read_float(FILE* fp) {
   bool   f   = false;
   int    fc  = 0;
   int    c;
-  while ((c = fgetc(fp)) != EOF) {
-    // printf("c=%c\n", c);
+  for (;;) {
+    c = fgetc(fp);
+    //printf("c=%c\n", c);
     switch (c) {
       case '\n': continue;
       case '\r': continue;
@@ -475,16 +476,20 @@ double read_float(FILE* fp) {
       case '8': num += 8; break;
       case '9': num += 9; break;
       case '.': f = true; break;
+      case ',':
+        ungetc(c, fp);
+        /* FALLTHROUGH */
+      case EOF: return num / pow(10.0, fc);
       default: ungetc(c, fp); return num / pow(10.0, fc + 1);
     }
     num *= 10;
     if (f) {
       fc++;
     }
-    // printf("num=%f, fc=%d\n",num,fc);
+    //printf("num=%f, fc=%d\n", num, fc);
   }
-  // PRINT_ERROR;
-  return num / pow(10.0, fc);
+  PRINT_ERROR;
+  // return num / pow(10.0, fc);
 }
 
 Node0* Node0Init(char   w,
@@ -500,19 +505,23 @@ Node0* Node0Init(char   w,
     PRINT_ERROR;
     return false;
   }
+  printf("w=%c, m=%f, s=%f, p=%f, l=%f, v=%f\n", w, m, s, p, l, v);
   n->start  = s * sampling_freq;
   n->period = sampling_freq / p;
   n->length = l * sampling_freq;
+  printf("max_volume=%lu, v = %f\n", max_volume, v);
   n->volume = max_volume * v;
   n->i      = 0;
   switch (w) {
-    case 'Z': n->wave = Zwave; break;
+    // case 'Z': n->wave = Zwave; break;
     case 'S': n->wave = Swave; break;
     case 'P': n->wave = Pwave; break;
     case 'T': n->wave = Twave; break;
     default: PRINT_ERROR; break;
   }
   n->midway = n->period * m;
+  printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
+         n->volume);
   return n;
 }
 
@@ -570,6 +579,8 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
   if (mm0 == NULL) {
     return NULL;
   }
+  mm0->tail          = NULL;
+  mm0->head          = NULL;
   mm0->sampling_freq = sampling_freq;
   mm0->max_volume    = INT16_MAX;
   for (;;) {
