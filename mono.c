@@ -1,6 +1,7 @@
 #include "mono_image.h"
 #include "mono_music.h"
 MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq);
+MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq);
 int         mono_music0_wav(FILE* fp, MonoMusic0* mm0);
 
 int main(void) {
@@ -9,7 +10,7 @@ int main(void) {
     perror("file open failed.");
     return 0;
   }
-  MonoMusic0* mm0 = mono_music0_parse(fp, 80000);
+  MonoMusic0* mm0 = mono_music0_parse2(fp, 80000);
   if (mm0 == NULL) {
     perror("mm0 == NULL failed.");
     return 0;
