@@ -517,6 +517,39 @@ int key_value(char key) {
   }
 }
 
+double read_float(FILE* fp) {
+  double num = 0;
+  int    f   = -1;
+  for (;;) {
+    int c = get_next(fp);
+    if (c == '.') {
+      f = 0;
+      continue;
+    }
+    //printf("c=%c\n", c);
+    switch (c) {
+      case '0': num = num * 10 + 0; break;
+      case '1': num = num * 10 + 1; break;
+      case '2': num = num * 10 + 2; break;
+      case '3': num = num * 10 + 3; break;
+      case '4': num = num * 10 + 4; break;
+      case '5': num = num * 10 + 5; break;
+      case '6': num = num * 10 + 6; break;
+      case '7': num = num * 10 + 7; break;
+      case '8': num = num * 10 + 8; break;
+      case '9': num = num * 10 + 9; break;
+      default:
+        if (c != EOF) {
+          ungetc(c, fp);
+          //printf("ungetc %c\n", c);
+        }
+        return num == 0 || f == -1 ? num : num / pow(10.0, f);
+    }
+    f += f == -1 ? 0 : 1;
+    //printf("n=%f, f=%d\n", num, f);
+  }
+}
+
 bool read_chunk0(FILE* fp, double chunk[]) {
   int c = get_next(fp);
   if (c == EOF) {
@@ -531,48 +564,9 @@ bool read_chunk0(FILE* fp, double chunk[]) {
     return false;
   }
 
-  chunk[i] = 0;
-  bool f   = false;
-  int  fc  = 0;
-  for (;;) {
-    chunk[i] *= 10;
-    c          = get_next(fp);
-    double num = 0;
-    switch (c) {
-      case '0': num = 0; break;
-      case '1': num = 1; break;
-      case '2': num = 2; break;
-      case '3': num = 3; break;
-      case '4': num = 4; break;
-      case '5': num = 5; break;
-      case '6': num = 6; break;
-      case '7': num = 7; break;
-      case '8': num = 8; break;
-      case '9': num = 9; break;
-      case '.':
-        f = true;
-        chunk[i] /= 10;
-        break;
-      case EOF:
-      case ',':
-      default:
-        if (c != EOF) {
-          ungetc(c, fp);
-        }
-        if (!f) {
-          fc++;
-        }
-        chunk[i] /= pow(10.0, fc);
-        printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
-        return true;
-    }
-    // chunk[i].empty = false;
-    chunk[i] += num;
-    printf("value = %f\n", chunk[i]);
-    if (f) {
-      fc++;
-    }
-  }
+  chunk[i] = read_float(fp);
+  printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
+  return true;
   PRINT_ERROR(" you cannot reach here");
   return false;
 }
