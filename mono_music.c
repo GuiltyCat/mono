@@ -129,280 +129,6 @@ int WavWrite(FILE* fp, Wav* wav) {
   return 0;
 }
 
-size_t read_line(FILE* fp, uint8_t* line, size_t num) {
-  size_t count = 0;
-  int    c;
-  while ((c = fgetc(fp)) != EOF) {
-    if (c == '\n') {
-      break;
-    }
-    if (num <= count) {
-      break;
-    }
-    printf("%c\n", c);
-    line[count] = c;
-    count++;
-  }
-  return count;
-}
-
-int note_to_num(uint8_t note, uint8_t shift) {
-  /* C4 D4 E4 F4 G4 A4 B4 */
-  int chromatic = 0;
-  switch (shift) {
-    // case '-':
-    case 'b': chromatic = -1; break;
-    // case '+':
-    case '#': chromatic = 1; break;
-    case ' ':
-    default: chromatic = 0;
-  }
-  switch (note) {
-    case 'C':
-    case 'c': return -9 + chromatic;
-    case 'D':
-    case 'd': return -7 + chromatic;
-    case 'E':
-    case 'e': return -5 + chromatic;
-    case 'F':
-    case 'f': return -4 + chromatic;
-    case 'G':
-    case 'g': return -2 + chromatic;
-    case 'A':
-    case 'a': return 0 + chromatic;
-    case 'B':
-    case 'b': return 2 + chromatic;
-    default: perror("Error"); exit(-1);
-  }
-}
-
-double octave_shift(double freq, int8_t shift) {
-  return freq * pow(2, shift);
-}
-
-double base_freq_equal_temptation(int num, double A4) {
-  return A4 * pow(2, num / 12.0);
-}
-
-double note_to_freq(uint8_t note, uint8_t acc, int8_t octave, double A4) {
-  printf("note=%c, acc=%c, octave=%d, A4=%f\n", note, acc, octave, A4);
-  return octave_shift(base_freq_equal_temptation(note_to_num(note, acc), A4),
-                      octave - 4);
-}
-
-void test_note_freq(void) {
-  uint8_t* note = (uint8_t*)"cdefgab";
-  for (size_t j = 0; j < 9; j++) {
-    for (size_t i = 0; i < 7; i++) {
-      printf("%cb%zu:%f\n", note[i], j, note_to_freq(note[i], 'b', j, 440.0));
-      printf("%c %zu:%f\n", note[i], j, note_to_freq(note[i], ' ', j, 440.0));
-      printf("%c#%zu:%f\n", note[i], j, note_to_freq(note[i], '#', j, 440.0));
-    }
-  }
-}
-
-struct List;
-typedef struct List List;
-struct Wave;
-typedef struct Wave Wave;
-
-struct List {
-  size_t i;
-  List*  next;
-  Wave*  wave;
-};
-
-List* ListInit(void) {
-  List* l = (List*)malloc(sizeof(List));
-  l->next = NULL;
-  l->wave = NULL;
-  l->i    = 0;
-  return l;
-}
-
-void ListFree(List* l) {
-  /* delete from head */
-  List* next = l->next;
-  Wave* wave = l->wave;
-  free(wave);
-  free(l);
-  if (next != NULL) {
-    ListFree(next);
-  }
-  return;
-}
-
-List* ListAdd(List* node, Wave* wave) {
-  List* next = ListInit();
-  next->wave = wave;
-  node->next = next;
-  return next;
-}
-
-struct Wave {
-  size_t period;
-  size_t i;
-  bool   trigger;
-};
-
-Wave* WaveInit(double freq, size_t sampling_freq) {
-  Wave* w = (Wave*)malloc(sizeof(Wave));
-  if (w == NULL) {
-    return NULL;
-  }
-  w->period  = (double)sampling_freq / freq;
-  w->i       = 0;
-  w->trigger = false;
-  return w;
-}
-void WaveFree(Wave* w) {
-  free(w);
-}
-double SawtoothWave(Wave* w) {
-  /* saw tooth Wave */
-  return (double)w->i / (double)w->period - 0.5;
-}
-
-double WaveNext(Wave* w) {
-  w->trigger = w->i == w->period;
-  w->i %= w->period;
-  double ret = SawtoothWave(w);
-  w->i++;
-  return ret;
-}
-
-bool WaveTest(void) {
-  FILE* fp = fopen("test.wav", "wb");
-  if (fp == NULL) {
-    perror("fp == NULL");
-    return -1;
-  }
-
-  double sec = 10;
-  Wav*   wav = WavInitSec(sec);
-  if (wav == NULL) {
-    perror("wav == NULL");
-    return false;
-  }
-
-  size_t sampling_freq = 80000;
-  Wave*  w             = WaveInit(440, sampling_freq);
-  for (size_t i = 0; i < sec * sampling_freq; i++) {
-    double next    = 10000 * WaveNext(w);
-    wav->signal[i] = next;
-  }
-
-  WaveFree(w);
-
-  WavWrite(fp, wav);
-
-  fclose(fp);
-  return true;
-}
-
-uint8_t parse_note(FILE* fp) {
-  int c;
-  while ((c = fgetc(fp)) != EOF) {
-    switch (c) {
-      case 'a':
-      case 'A':
-      case 'b':
-      case 'B':
-      case 'c':
-      case 'C':
-      case 'd':
-      case 'D':
-      case 'e':
-      case 'E':
-      case 'f':
-      case 'F':
-      case 'g':
-      case 'G': return c;
-      default: perror("Such value is not permitted."); break;
-    }
-  }
-  return 0;
-}
-
-uint8_t parse_octave(FILE* fp) {
-  int c;
-  while ((c = fgetc(fp)) != EOF) {
-    switch (c) {
-      case '0': return 0;
-      case '1': return 1;
-      case '2': return 2;
-      case '3': return 3;
-      case '4': return 4;
-      case '5': return 5;
-      case '6': return 6;
-      case '7': return 7;
-      case '8': return 8;
-      default: perror("Such value is not permitted.");
-    }
-  }
-  perror("cannot reach here.");
-  exit(-1);
-}
-
-List* parse_sheet(FILE* fp, uint32_t sampling_freq) {
-  List* head = ListInit();
-  List* next = head;
-  for (;;) {
-    if (feof(fp)) {
-      break;
-    }
-    uint8_t note = parse_note(fp);
-    if (note == 0) {
-      break;
-    }
-    uint8_t oct  = parse_octave(fp);
-    double  freq = note_to_freq(note, ' ', oct, 440);
-    Wave*   w    = WaveInit(freq, sampling_freq);
-    next         = ListAdd(next, w);
-    // WaveFree(w);
-    printf("freq=%f\n", freq);
-  }
-  return head;
-}
-
-bool ListToWav(FILE* fp, List* l) {
-  uint32_t sampling_freq = 80000;
-  double   sec           = 100;
-  Wav*     wav           = WavInitSec(sec);
-  if (wav == NULL) {
-    return false;
-  }
-  size_t i = 0;
-  for (List* next = l; next != NULL; next = next->next) {
-    for (size_t j = 0; j < sampling_freq; j++) {
-      // printf("%lu:%lu\n", i, j);
-      if (next->wave)
-        wav->signal[i++] = 10000 * WaveNext(next->wave);
-    }
-  }
-  WavWrite(fp, wav);
-  WavFree(wav);
-  return true;
-}
-void parse_test(void) {
-  FILE* fp = fopen("test_music.mono", "r");
-  if (fp == NULL) {
-    perror("open failed");
-    return;
-  }
-  List* l = parse_sheet(fp, 80000);
-  fclose(fp);
-  fp = fopen("test.wav", "w");
-  if (fp == NULL) {
-    perror("write open failed.");
-    exit(-1);
-  }
-  ListToWav(fp, l);
-  fclose(fp);
-  ListFree(l);
-  return;
-}
-
 int get_next(FILE* fp) {
   for (;;) {
     int c = fgetc(fp);
@@ -503,6 +229,8 @@ void MonoMusic0Free(MonoMusic0* mm0) {
 }
 
 int key_value(char key) {
+  /* 0-5 for chunk
+   * 6-12 for scale */
   switch (key) {
     case 's': return 0;
     case 'l': return 1;
@@ -510,6 +238,20 @@ int key_value(char key) {
     case 'm': return 3;
     case 'p': return 4;
     case 'v': return 5;
+    case 'A':
+    case 'a': return 6;
+    case 'B':
+    case 'b': return 7;
+    case 'C':
+    case 'c': return 8;
+    case 'D':
+    case 'd': return 9;
+    case 'E':
+    case 'e': return 10;
+    case 'F':
+    case 'f': return 11;
+    case 'G':
+    case 'g': return 12;
     default:
       PRINT_ERROR("such key is not expected.");
       printf("key=%c:%d\n", key, key);
@@ -526,7 +268,7 @@ double read_float(FILE* fp) {
       f = 0;
       continue;
     }
-    //printf("c=%c\n", c);
+    // printf("c=%c\n", c);
     switch (c) {
       case '0': num = num * 10 + 0; break;
       case '1': num = num * 10 + 1; break;
@@ -541,13 +283,80 @@ double read_float(FILE* fp) {
       default:
         if (c != EOF) {
           ungetc(c, fp);
-          //printf("ungetc %c\n", c);
+          // printf("ungetc %c\n", c);
         }
         return num == 0 || f == -1 ? num : num / pow(10.0, f);
     }
     f += f == -1 ? 0 : 1;
-    //printf("n=%f, f=%d\n", num, f);
+    // printf("n=%f, f=%d\n", num, f);
   }
+}
+
+int read_acc(FILE* fp) {
+  int c = get_next(fp);
+  switch (c) {
+    case '#': return +1;
+    case 'b': return -1;
+    default:
+      if (c != EOF) {
+        ungetc(c, fp);
+      }
+      return 0;
+  }
+}
+int read_octave(FILE* fp) {
+  int c = get_next(fp);
+  switch (c) {
+    case '0': return 1;
+    case '1': return 1;
+    case '2': return 2;
+    case '3': return 3;
+    case '4': return 4;
+    case '5': return 5;
+    case '6': return 6;
+    case '7': return 7;
+    case '8': return 8;
+    case '9': return 9;
+    default:
+      if (c != EOF) {
+        ungetc(c, fp);
+      }
+      return 4;
+  }
+}
+
+int read_scale(int num) {
+  /* CDEFGAB */
+  switch (num) {
+    case 8: return -9;
+    case 9: return -7;
+    case 10: return -5;
+    case 11: return -4;
+    case 12: return -2;
+    case 6: return 0;
+    case 7: return 2;
+    default: PRINT_ERROR("num is not allowed."); return -1;
+  }
+}
+
+double octave_shift(double freq, int8_t shift) {
+  return freq * pow(2, shift);
+}
+
+double base_freq_equal_temptation(int num, double A4) {
+  return A4 * pow(2, num / 12.0);
+}
+
+double read_note(int num, FILE* fp, double A4) {
+  int note = read_scale(num);
+  int oct  = read_octave(fp);
+  int acc  = read_acc(fp);
+  // printf("note = %d, oct = %d, acc = %d\n",note,oct,acc);
+  /* requre A4 freq */
+  double base = base_freq_equal_temptation(note + acc, A4);
+  // printf("base = %f\n",base);
+  // printf("oc   = %f\n", octave_shift(base, oct) );
+  return octave_shift(base, oct - 4);
 }
 
 bool read_chunk0(FILE* fp, double chunk[]) {
@@ -562,9 +371,18 @@ bool read_chunk0(FILE* fp, double chunk[]) {
     PRINT_ERROR("i==-1");
     perror("v == -1");
     return false;
+  } else if (i <= 5) {
+    /* for chunk */
+    chunk[i] = read_float(fp);
+
+  } else {
+    // printf("c = %d\n",c);
+    /* for scale */
+    size_t j = key_value('p');
+    chunk[j] = read_note(i, fp, 440);
+    printf("read_not = %f\n", chunk[j]);
   }
 
-  chunk[i] = read_float(fp);
   printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
   return true;
   PRINT_ERROR(" you cannot reach here");
