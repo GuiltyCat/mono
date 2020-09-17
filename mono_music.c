@@ -138,7 +138,7 @@ int get_next(FILE* fp) {
       case '\v':
       case '\r':
       case '\n': continue;
-      case '#':
+      case '!':
         /* skip comment */
         for (;;) {
           c = fgetc(fp);
@@ -259,11 +259,27 @@ int key_value(char key) {
   }
 }
 
-double read_float(FILE* fp) {
+typedef struct {
+  double value;
+  /* +1 means relative +
+   * 0 means absolute
+   * -1  means relative -
+   */
+  int sign;
+} Chunk0;
+
+double read_float(FILE* fp, int* sign) {
   double num = 0;
   int    f   = -1;
+  int    c   = get_next(fp);
+  switch (c) {
+    case '+': *sign = 1; break;
+    case '-': *sign = -1; break;
+    case EOF: return 0;
+    default: ungetc(c, fp);
+  }
   for (;;) {
-    int c = get_next(fp);
+    c = get_next(fp);
     if (c == '.') {
       f = 0;
       continue;
@@ -359,37 +375,36 @@ double read_note(int num, FILE* fp, double A4) {
   return octave_shift(base, oct - 4);
 }
 
-bool read_chunk0(FILE* fp, double chunk[]) {
+bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
   int c = get_next(fp);
   if (c == EOF) {
     PRINT_ERROR("c == EOF");
     return false;
   }
-  char key = c;
-  int  i   = key_value((char)c);
+  // char key = c;
+  int i = key_value((char)c);
   if (i == -1) {
     PRINT_ERROR("i==-1");
     perror("v == -1");
     return false;
   } else if (i <= 5) {
     /* for chunk */
-    chunk[i] = read_float(fp);
-
+    chunk[i].value = read_float(fp, &chunk[i].sign);
   } else {
     // printf("c = %d\n",c);
     /* for scale */
-    size_t j = key_value('p');
-    chunk[j] = read_note(i, fp, 440);
-    printf("read_not = %f\n", chunk[j]);
+    size_t j       = key_value('p');
+    chunk[j].value = read_note(i, fp, 440);
+    printf("read_not = %f\n", chunk[j].value);
   }
 
-  printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
+  // printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
   return true;
   PRINT_ERROR(" you cannot reach here");
   return false;
 }
 
-Node0* Node0InitChunk0(double chunk[],
+Node0* Node0InitChunk0(Chunk0 chunk[],
                        size_t sampling_freq,
                        size_t max_volume) {
   Node0* n = malloc(sizeof(Node0));
@@ -397,20 +412,22 @@ Node0* Node0InitChunk0(double chunk[],
     PRINT_ERROR("n == NULL");
     return NULL;
   }
-  n->start  = chunk[key_value('s')] * sampling_freq;
-  n->period = sampling_freq / chunk[key_value('p')];
-  n->length = chunk[key_value('l')] * sampling_freq;
-  n->volume = max_volume * chunk[key_value('v')];
-  n->midway = n->period * chunk[key_value('m')];
+  n->start  = chunk[key_value('s')].value * sampling_freq;
+  n->period = sampling_freq / chunk[key_value('p')].value;
+  n->length = chunk[key_value('l')].value * sampling_freq;
+  /* end of wave must be 0 really works? */
+  n->length = n->length - n->length % n->period;
+  n->volume = max_volume * chunk[key_value('v')].value;
+  n->midway = n->period * chunk[key_value('m')].value;
   n->i      = 0;
-  switch ((int)chunk[key_value('w')]) {
+  switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
     case 1: n->wave = Pwave; break;
     case 2: n->wave = Twave; break;
     default:
       PRINT_ERROR("such wave is not expected.");
       perror("such w is not exist.");
-      printf("w=%f\n", chunk[key_value('w')]);
+      printf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
   printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
@@ -418,7 +435,7 @@ Node0* Node0InitChunk0(double chunk[],
   return n;
 }
 
-bool MonoMusic0InsertChunk0(MonoMusic0* mm0, double chunk[]) {
+bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
   if (mm0 == NULL) {
     PRINT_ERROR("mm0 == NULL");
     return false;
@@ -453,7 +470,11 @@ MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq) {
   mm0->sampling_freq = sampling_freq;
   mm0->max_volume    = INT16_MAX;
 
-  double chunk[6] = {0};
+  Chunk0 chunk[6] = {0};
+  for (size_t i = 0; i < 6; i++) {
+    chunk[0].value = 0;
+    chunk[0].sign  = 0;
+  }
 
   for (;;) {
     int c = get_next(fp);
@@ -462,8 +483,8 @@ MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq) {
       if (c == EOF) {
         break;
       }
-      double start          = chunk[key_value('s')];
-      chunk[key_value('s')] = start + chunk[key_value('l')];
+      double start                = chunk[key_value('s')].value;
+      chunk[key_value('s')].value = start + chunk[key_value('l')].value;
     } else {
       ungetc(c, fp);
     }
