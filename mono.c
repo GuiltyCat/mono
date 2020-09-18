@@ -4,7 +4,26 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq);
 MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq);
 int         mono_music0_wav(FILE* fp, MonoMusic0* mm0);
 
+double read_float(FILE* fp);
+void   read_float_test(void) {
+  FILE* fp = fopen("float.txt", "r");
+  if (fp == NULL) {
+    perror("fp == NULL");
+    return;
+  }
+  while (!feof(fp)) {
+    double num = read_float(fp);
+    fgetc(fp);
+    printf("ln=%f\n\n", num);
+  }
+  return;
+}
+
 int main(void) {
+  // read_float_test();
+  // return 0;
+  //	read_float_test();
+  //	return 0;
   FILE* fp = fopen("test_music.mono", "r");
   if (fp == NULL) {
     perror("file open failed.");

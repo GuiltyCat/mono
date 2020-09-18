@@ -276,7 +276,7 @@ double read_float(FILE* fp, int* sign) {
     case '+': *sign = 1; break;
     case '-': *sign = -1; break;
     case EOF: return 0;
-    default: ungetc(c, fp);
+    default: ungetc(c, fp); break;
   }
   for (;;) {
     c = get_next(fp);
@@ -395,7 +395,7 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
     /* for scale */
     size_t j       = key_value('p');
     chunk[j].value = read_note(i, fp, 440);
-    printf("read_not = %f\n", chunk[j].value);
+    //printf("read_note = %f\n", chunk[j].value);
   }
 
   // printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
@@ -430,8 +430,8 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
       printf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
-  printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
-         n->volume);
+  // printf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period, n->midway,
+  //        n->length, n->volume);
   return n;
 }
 
@@ -445,7 +445,7 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
     PRINT_ERROR("n == NULL");
     return false;
   }
-  printf("List0Insert\n");
+  //printf("List0Insert\n");
   List0* next = List0Insert(mm0->tail, n);
   // printf("next = %p\n", next);
   mm0->tail = next;
@@ -472,19 +472,33 @@ MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq) {
 
   Chunk0 chunk[6] = {0};
   for (size_t i = 0; i < 6; i++) {
-    chunk[0].value = 0;
-    chunk[0].sign  = 0;
+    chunk[i].value = 0;
+    chunk[i].sign  = 0;
   }
+
+  double start = 0;
+  double end   = 0;
 
   for (;;) {
     int c = get_next(fp);
     if (c == ',' || c == EOF) {
+      int s = key_value('s');
+      switch (chunk[s].sign) {
+        case +1: chunk[s].value += start; break;
+        case 0: break;
+        case -1: chunk[s].value = end - chunk[s].value; break;
+        default: PRINT_ERROR("such sign is not permitted."); break;
+      }
       MonoMusic0InsertChunk0(mm0, chunk);
       if (c == EOF) {
         break;
       }
-      double start                = chunk[key_value('s')].value;
-      chunk[key_value('s')].value = start + chunk[key_value('l')].value;
+      start                       = chunk[key_value('s')].value;
+      end                         = start + chunk[key_value('l')].value;
+      chunk[key_value('s')].value = end;
+      for (size_t i = 0; i < 6; i++) {
+        chunk[i].sign = 0;
+      }
     } else {
       ungetc(c, fp);
     }
@@ -504,18 +518,32 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     PRINT_ERROR("tail == NULL || head == NULL");
     return -1;
   }
-  printf("start = %lu\n", tail->node->start);
-  printf("length = %lu\n", tail->node->length);
-  Wav* w = WavInit(tail->node->start + tail->node->length, mm0->sampling_freq);
+  size_t length = 0;
+  for (List0* l = head; l != NULL; l = l->next) {
+    Node0* n = l->node;
+    if (n->start + n->length > length) {
+      length = n->start + n->length;
+    }
+  }
+  // printf("start = %lu\n", tail->node->start);
+  // printf("length = %lu\n", tail->node->length);
+  Wav* w = WavInit(length, mm0->sampling_freq);
   for (List0* l = head; l != NULL; l = l->next) {
     Node0* n = l->node;
     printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
            n->volume);
     for (size_t i = 0; i < n->length; i++) {
       // printf("i=%lu\n",n->i);
-      WAV_AT(w, n->start + i) += Node0Next(n);
+	  int value = Node0Next(n);
+      if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
+        printf("OVERFLOW OCCURED: %lu\n", i);
+		goto SKIP_FOR;
+      }
+      WAV_AT(w, n->start + i) += value;
       // printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
     }
+SKIP_FOR:
+	;
   }
   putchar('\n');
   int ret = WavWrite(fp, w);
