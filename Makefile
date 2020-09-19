@@ -10,7 +10,7 @@ OBJDIR=./obj
 OBJ=$(addprefix $(OBJDIR)/,$(subst .c,.o, $(subst .cc,.o, $(subst .cpp,.o, $(SRC)))))
 DEP=$(subst .o,.d,$(OBJ))
 
-PROJECT=main.out
+PROJECT=mono.out
 
 .PHONY:all clean run $(PROJECT) 
 

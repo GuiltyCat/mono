@@ -302,7 +302,7 @@ int read_sign(FILE* fp) {
     default: ungetc(c, fp); return 0;
   }
 }
-double read_float(FILE* fp) {
+static double read_float(FILE* fp) {
   double num = 0;
   int    f   = -1;
   int    c;
@@ -336,7 +336,7 @@ double read_float(FILE* fp) {
   }
 }
 
-void   read_float_test(void) {
+void read_float_test(void) {
   FILE* fp = fopen("float.txt", "r");
   if (fp == NULL) {
     perror("fp == NULL");
@@ -349,7 +349,6 @@ void   read_float_test(void) {
   }
   return;
 }
-
 
 double read_fraction(FILE* fp, int* sign) {
   *sign    = read_sign(fp);
@@ -431,7 +430,7 @@ double read_note(int num, FILE* fp, double A4) {
   return octave_shift(base, oct - 4);
 }
 
-bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
+bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
   int c = get_next(fp);
   if (c == EOF) {
     PRINT_ERROR("c == EOF");
@@ -443,6 +442,8 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
     PRINT_ERROR("i==-1");
     perror("v == -1");
     return false;
+  } else if (i <= 1) {
+    chunk[i].value = spb * read_fraction(fp, &chunk[i].sign);
   } else if (i <= 5) {
     /* for chunk */
     chunk[i].value = read_fraction(fp, &chunk[i].sign);
@@ -450,7 +451,7 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
     // printf("c = %d\n",c);
     /* for scale */
     size_t j       = key_value('p');
-    chunk[j].value = read_note(i, fp, 440);
+    chunk[j].value = read_note(i, fp, A4);
     // printf("read_note = %f\n", chunk[j].value);
   }
 
@@ -517,7 +518,10 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
   return true;
 }
 
-MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
+MonoMusic0* mono_music0_parse(FILE*  fp,
+                              size_t sampling_freq,
+                              double A4,
+                              double bpm) {
   MonoMusic0* mm0 = malloc(sizeof(MonoMusic0));
   if (mm0 == NULL) {
     return NULL;
@@ -526,6 +530,10 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
   mm0->head          = NULL;
   mm0->sampling_freq = sampling_freq;
   mm0->max_volume    = INT16_MAX;
+
+  /* second per beats */
+  double spb = 60.0 / bpm;
+  printf("spb = %f\n", spb);
 
   Chunk0 chunk[6] = {0};
   for (size_t i = 0; i < 6; i++) {
@@ -559,7 +567,7 @@ MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
     } else {
       ungetc(c, fp);
     }
-    if (read_chunk0(fp, chunk) == false) {
+    if (read_chunk0(fp, chunk, A4, spb) == false) {
       PRINT_ERROR("read_chunk0(fp, chunk) == false");
       perror("read_chunk0 == false");
       break;

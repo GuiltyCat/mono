@@ -23,32 +23,11 @@ int  WavWrite(FILE* fp, Wav* wav);
 
 bool WaveTest(void);
 
-typedef struct Node0      Node0;
-typedef struct List0      List0;
+
+struct MonoMusic0;
 typedef struct MonoMusic0 MonoMusic0;
 
-struct Node0 {
-  /* all value is converted to integer by sampling freq */
-  size_t start;  /* absolute */
-  size_t period; /* absolute */
-  size_t length; /* absolute */
-  double volume; /* absolute */
-  size_t i;      /* index for next */
-  size_t midway; /* used for pulse wave */
-  double (*wave)(Node0* node);
-};
-
-struct List0 {
-  /* all node should be ordered by start */
-  List0* next;
-  Node0* node;
-};
-
-struct MonoMusic0 {
-  size_t sampling_freq;
-  size_t max_volume;
-  List0* head;
-  List0* tail;
-};
+MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq, double A4, double bpm);
+int         mono_music0_wav(FILE* fp, MonoMusic0* mm0);
 
 #endif
