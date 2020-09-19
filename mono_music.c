@@ -129,6 +129,31 @@ int WavWrite(FILE* fp, Wav* wav) {
   return 0;
 }
 
+typedef struct Node0 Node0;
+typedef struct List0 List0;
+struct Node0 {
+  /* all value is converted to integer by sampling freq */
+  size_t start;  /* absolute */
+  size_t period; /* absolute */
+  size_t length; /* absolute */
+  double volume; /* absolute */
+  size_t i;      /* index for next */
+  size_t midway; /* used for pulse wave */
+  double (*wave)(Node0* node);
+};
+
+struct List0 {
+  /* all node should be ordered by start */
+  List0* next;
+  Node0* node;
+};
+struct MonoMusic0 {
+  size_t sampling_freq;
+  size_t max_volume;
+  List0* head;
+  List0* tail;
+};
+
 int get_next(FILE* fp) {
   for (;;) {
     int c = fgetc(fp);
@@ -311,6 +336,21 @@ double read_float(FILE* fp) {
   }
 }
 
+void   read_float_test(void) {
+  FILE* fp = fopen("float.txt", "r");
+  if (fp == NULL) {
+    perror("fp == NULL");
+    return;
+  }
+  while (!feof(fp)) {
+    double num = read_float(fp);
+    fgetc(fp);
+    printf("ln=%f\n\n", num);
+  }
+  return;
+}
+
+
 double read_fraction(FILE* fp, int* sign) {
   *sign    = read_sign(fp);
   double n = read_float(fp);
@@ -319,7 +359,7 @@ double read_fraction(FILE* fp, int* sign) {
   if (c == '/') {
     d = read_float(fp);
   } else {
-	  ungetc(c, fp);
+    ungetc(c, fp);
   }
   return n / d;
 }
@@ -477,7 +517,7 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
   return true;
 }
 
-MonoMusic0* mono_music0_parse2(FILE* fp, size_t sampling_freq) {
+MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq) {
   MonoMusic0* mm0 = malloc(sizeof(MonoMusic0));
   if (mm0 == NULL) {
     return NULL;
