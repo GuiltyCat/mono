@@ -268,16 +268,19 @@ typedef struct {
   int sign;
 } Chunk0;
 
-double read_float(FILE* fp, int* sign) {
+int read_sign(FILE* fp) {
+  int c = get_next(fp);
+  switch (c) {
+    case '+': return 1;
+    case '-': return -1;
+    case EOF: return 0;
+    default: ungetc(c, fp); return 0;
+  }
+}
+double read_float(FILE* fp) {
   double num = 0;
   int    f   = -1;
-  int    c   = get_next(fp);
-  switch (c) {
-    case '+': *sign = 1; break;
-    case '-': *sign = -1; break;
-    case EOF: return 0;
-    default: ungetc(c, fp); break;
-  }
+  int    c;
   for (;;) {
     c = get_next(fp);
     if (c == '.') {
@@ -306,6 +309,19 @@ double read_float(FILE* fp, int* sign) {
     f += f == -1 ? 0 : 1;
     // printf("n=%f, f=%d\n", num, f);
   }
+}
+
+double read_fraction(FILE* fp, int* sign) {
+  *sign    = read_sign(fp);
+  double n = read_float(fp);
+  double d = 1;
+  int    c = get_next(fp);
+  if (c == '/') {
+    d = read_float(fp);
+  } else {
+	  ungetc(c, fp);
+  }
+  return n / d;
 }
 
 int read_acc(FILE* fp) {
@@ -389,13 +405,13 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[]) {
     return false;
   } else if (i <= 5) {
     /* for chunk */
-    chunk[i].value = read_float(fp, &chunk[i].sign);
+    chunk[i].value = read_fraction(fp, &chunk[i].sign);
   } else {
     // printf("c = %d\n",c);
     /* for scale */
     size_t j       = key_value('p');
     chunk[j].value = read_note(i, fp, 440);
-    //printf("read_note = %f\n", chunk[j].value);
+    // printf("read_note = %f\n", chunk[j].value);
   }
 
   // printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
@@ -430,7 +446,8 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
       printf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
-  // printf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period, n->midway,
+  // printf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period,
+  // n->midway,
   //        n->length, n->volume);
   return n;
 }
@@ -445,7 +462,7 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
     PRINT_ERROR("n == NULL");
     return false;
   }
-  //printf("List0Insert\n");
+  // printf("List0Insert\n");
   List0* next = List0Insert(mm0->tail, n);
   // printf("next = %p\n", next);
   mm0->tail = next;
@@ -534,16 +551,15 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
            n->volume);
     for (size_t i = 0; i < n->length; i++) {
       // printf("i=%lu\n",n->i);
-	  int value = Node0Next(n);
+      int value = Node0Next(n);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
         printf("OVERFLOW OCCURED: %lu\n", i);
-		goto SKIP_FOR;
+        goto SKIP_FOR;
       }
       WAV_AT(w, n->start + i) += value;
       // printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
     }
-SKIP_FOR:
-	;
+  SKIP_FOR:;
   }
   putchar('\n');
   int ret = WavWrite(fp, w);
