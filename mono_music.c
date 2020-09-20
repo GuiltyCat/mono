@@ -139,6 +139,7 @@ struct Node0 {
   double volume; /* absolute */
   size_t i;      /* index for next */
   size_t midway; /* used for pulse wave */
+  size_t till;   /* percent */
   double (*wave)(Node0* node);
 };
 
@@ -194,16 +195,24 @@ double Pwave(Node0* n) {
   /* pulse wave */
   /* |--------| n->period
    * |-----|__| n->midway + (n->period - n->midway) */
-  return n->i <= n->midway ? 1 : -1;
+  // printf("%f\n", n->i <= n->midway ? (double)n->midway/(double)n->period : -1
+  // + (double)n->midway/(double)n->period);
+  return n->i <= n->midway ? (double)n->midway / (double)n->period
+                           : -1 + (double)n->midway / (double)n->period;
+  // return n->i <= n->midway ? n->midway : -1 + n->midway;
 }
 
 double Twave(Node0* n) {
   /* triangle wave */
   /* |------| n->length
-   * |///\\\| n->midway + (n->period - n->midway) */
-  return n->i <= n->midway ? 2.0 * ((double)n->i / (double)n->midway) - 1.0
-                           : 1.0 - 2.0 * (double)(n->period - n->i) /
-                                       (double)(n->period - n->midway);
+   * |///\\\| n->midway + (n->period - n->midway)
+   * then shift phase in order to start from and end with 0.
+   * */
+
+  size_t i = n->i + n->midway / 2;
+  return i <= n->midway ? 2.0 * ((double)i / (double)n->midway) - 1.0
+                        : 1.0 - 2.0 * (double)(n->period - i) /
+                                    (double)(n->period - n->midway);
 }
 
 double Node0Next(Node0* n) {
@@ -257,26 +266,36 @@ int key_value(char key) {
   /* 0-5 for chunk
    * 6-12 for scale */
   switch (key) {
+    case 'S':
     case 's': return 0;
+    case 'L':
     case 'l': return 1;
+    case 'W':
     case 'w': return 2;
+    case 'M':
     case 'm': return 3;
+    case 'P':
     case 'p': return 4;
+    case 'V':
     case 'v': return 5;
+    case 'T':
+    case 't':
+      return 6;
+      /* for  */
     case 'A':
-    case 'a': return 6;
+    case 'a': return 15;
     case 'B':
-    case 'b': return 7;
+    case 'b': return 16;
     case 'C':
-    case 'c': return 8;
+    case 'c': return 10;
     case 'D':
-    case 'd': return 9;
+    case 'd': return 11;
     case 'E':
-    case 'e': return 10;
+    case 'e': return 12;
     case 'F':
-    case 'f': return 11;
+    case 'f': return 13;
     case 'G':
-    case 'g': return 12;
+    case 'g': return 14;
     default:
       PRINT_ERROR("such key is not expected.");
       printf("key=%c:%d\n", key, key);
@@ -288,8 +307,7 @@ typedef struct {
   double value;
   /* +1 means relative +
    * 0 means absolute
-   * -1  means relative -
-   */
+   * -1  means relative - */
   int sign;
 } Chunk0;
 
@@ -399,13 +417,13 @@ int read_octave(FILE* fp) {
 int read_scale(int num) {
   /* CDEFGAB */
   switch (num) {
-    case 8: return -9;
-    case 9: return -7;
-    case 10: return -5;
-    case 11: return -4;
-    case 12: return -2;
-    case 6: return 0;
-    case 7: return 2;
+    case 10: return -9;
+    case 11: return -7;
+    case 12: return -5;
+    case 13: return -4;
+    case 14: return -2;
+    case 15: return 0;
+    case 16: return 2;
     default: PRINT_ERROR("num is not allowed."); return -1;
   }
 }
@@ -444,7 +462,7 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
     return false;
   } else if (i <= 1) {
     chunk[i].value = spb * read_fraction(fp, &chunk[i].sign);
-  } else if (i <= 5) {
+  } else if (i <= 6) {
     /* for chunk */
     chunk[i].value = read_fraction(fp, &chunk[i].sign);
   } else {
@@ -473,17 +491,19 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
   n->period = sampling_freq / chunk[key_value('p')].value;
   n->length = chunk[key_value('l')].value * sampling_freq;
   /* end of wave must be 0 really works? */
-  n->length = n->length - n->length % n->period;
+  //n->length = n->length - n->length % n->period;
   n->volume = max_volume * chunk[key_value('v')].value;
   n->midway = n->period * chunk[key_value('m')].value;
   n->i      = 0;
+  n->till   = n->length * chunk[key_value('t')].value;
+  n->till = n->till - n->till % n->period;
   switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
     case 1: n->wave = Pwave; break;
     case 2: n->wave = Twave; break;
     default:
-      PRINT_ERROR("such wave is not expected.");
-      perror("such w is not exist.");
+      PRINT_ERROR("such wave does not expected.");
+      perror("such w does not exist.");
       printf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
@@ -535,11 +555,14 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
   double spb = 60.0 / bpm;
   printf("spb = %f\n", spb);
 
-  Chunk0 chunk[6] = {0};
-  for (size_t i = 0; i < 6; i++) {
-    chunk[i].value = 0;
-    chunk[i].sign  = 0;
-  }
+  Chunk0 chunk[7] = {0};
+  chunk[key_value('s')].value = 0;
+  chunk[key_value('p')].value = 0;
+  chunk[key_value('l')].value = 1;
+  chunk[key_value('v')].value = 0.2;
+  chunk[key_value('m')].value = 0;
+  chunk[key_value('t')].value = 0.9;
+  chunk[key_value('w')].value = 0;
 
   double start = 0;
   double end   = 0;
@@ -597,7 +620,8 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     Node0* n = l->node;
     printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
            n->volume);
-    for (size_t i = 0; i < n->length; i++) {
+    //for (size_t i = 0; i < n->length; i++) {
+    for (size_t i = 0; i < n->till; i++) {
       // printf("i=%lu\n",n->i);
       int value = Node0Next(n);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
