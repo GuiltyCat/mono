@@ -139,7 +139,7 @@ struct Node0 {
   double volume; /* absolute */
   size_t i;      /* index for next */
   size_t midway; /* used for pulse wave */
-  size_t till;   /* percent */
+  size_t till;   /* sec */
   double (*wave)(Node0* node);
 };
 
@@ -296,6 +296,9 @@ int key_value(char key) {
     case 'f': return 13;
     case 'G':
     case 'g': return 14;
+
+    case '<': return 20;
+    case '>': return 21;
     default:
       PRINT_ERROR("such key is not expected.");
       printf("key=%c:%d\n", key, key);
@@ -415,7 +418,10 @@ int read_octave(FILE* fp) {
 }
 
 int read_scale(int num) {
-  /* CDEFGAB */
+  /* CDEFGAB
+   *
+   * A, A# == Bb
+   * */
   switch (num) {
     case 10: return -9;
     case 11: return -7;
@@ -432,6 +438,10 @@ double octave_shift(double freq, int8_t shift) {
   return freq * pow(2, shift);
 }
 
+double note_shift(double freq, int8_t shift) {
+  return freq * pow(2, shift / 12.0);
+}
+
 double base_freq_equal_temptation(int num, double A4) {
   return A4 * pow(2, num / 12.0);
 }
@@ -446,6 +456,17 @@ double read_note(int num, FILE* fp, double A4) {
   // printf("base = %f\n",base);
   // printf("oc   = %f\n", octave_shift(base, oct) );
   return octave_shift(base, oct - 4);
+}
+
+double read_shift(FILE* fp, double freq, int sign) {
+  if (freq < 0) {
+    printf("read shif == -1\n");
+  } else {
+    printf("read shif == +1\n");
+  }
+  int shift = sign* 2 * read_float(fp);
+  printf("freq = %f, shift = %d\n", freq, shift);
+  return note_shift(freq, shift);
 }
 
 bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
@@ -465,12 +486,15 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
   } else if (i <= 6) {
     /* for chunk */
     chunk[i].value = read_fraction(fp, &chunk[i].sign);
-  } else {
+  } else if (i < 17) {
     // printf("c = %d\n",c);
     /* for scale */
     size_t j       = key_value('p');
     chunk[j].value = read_note(i, fp, A4);
     // printf("read_note = %f\n", chunk[j].value);
+  } else {
+    size_t j       = key_value('p');
+    chunk[j].value = read_shift(fp, chunk[j].value, i == 20 ? -1 : 1);
   }
 
   // printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
@@ -488,14 +512,16 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
     return NULL;
   }
   n->start  = chunk[key_value('s')].value * sampling_freq;
-  n->period = sampling_freq / chunk[key_value('p')].value;
+  n->period = round(sampling_freq / chunk[key_value('p')].value);
   n->length = chunk[key_value('l')].value * sampling_freq;
   /* end of wave must be 0 really works? */
-  //n->length = n->length - n->length % n->period;
+  // n->length = n->length - n->length % n->period;
   n->volume = max_volume * chunk[key_value('v')].value;
   n->midway = n->period * chunk[key_value('m')].value;
   n->i      = 0;
-  n->till   = n->length * chunk[key_value('t')].value;
+  // n->till   = n->length * chunk[key_value('t')].value;
+  n->till = n->length - sampling_freq * chunk[key_value('t')].value;
+  printf("n->till = %lu, n->period = %lu\n",n->till,n->period);
   n->till = n->till - n->till % n->period;
   switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
@@ -555,13 +581,13 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
   double spb = 60.0 / bpm;
   printf("spb = %f\n", spb);
 
-  Chunk0 chunk[7] = {0};
+  Chunk0 chunk[7]             = {0};
   chunk[key_value('s')].value = 0;
   chunk[key_value('p')].value = 0;
   chunk[key_value('l')].value = 1;
   chunk[key_value('v')].value = 0.2;
   chunk[key_value('m')].value = 0;
-  chunk[key_value('t')].value = 0.9;
+  chunk[key_value('t')].value = 0;
   chunk[key_value('w')].value = 0;
 
   double start = 0;
@@ -576,6 +602,10 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
         case 0: break;
         case -1: chunk[s].value = end - chunk[s].value; break;
         default: PRINT_ERROR("such sign is not permitted."); break;
+      }
+      int t = key_value('t');
+      if (chunk[t].sign == 1) {
+        chunk[t].value = chunk[key_value('l')].value - chunk[t].value;
       }
       MonoMusic0InsertChunk0(mm0, chunk);
       if (c == EOF) {
@@ -620,7 +650,7 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     Node0* n = l->node;
     printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
            n->volume);
-    //for (size_t i = 0; i < n->length; i++) {
+    // for (size_t i = 0; i < n->length; i++) {
     for (size_t i = 0; i < n->till; i++) {
       // printf("i=%lu\n",n->i);
       int value = Node0Next(n);
@@ -637,4 +667,21 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   int ret = WavWrite(fp, w);
   WavFree(w);
   return ret;
+}
+
+bool test_swave(void) {
+  size_t sampling_freq        = 80000;
+  double sec                  = 0.10;
+  Chunk0 chunk[6]             = {0};
+  chunk[key_value('p')].value = 440;
+  chunk[key_value('l')].value = sec * sampling_freq;
+  chunk[key_value('v')].value = 1;
+  Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
+  for (size_t i = 0; i < sampling_freq * sec; i++) {
+    double s0 = Node0Next(n);
+    double s1 = sin(2 * M_PI * i / sampling_freq * 440);
+    printf("%lu  %f %f\n", i, s0, s1);
+  }
+  free(n);
+  return true;
 }
