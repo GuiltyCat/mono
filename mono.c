@@ -84,7 +84,11 @@ bool parse_args(int argc, char* argv[], Args* args) {
   return true;
 }
 
+bool test_swave(void);
+
 int main(int argc, char* argv[]) {
+  // test_swave();
+  // return 0;
   Args args = {NULL, NULL, 440, 60};
   if (parse_args(argc, argv, &args) == false) {
     return 0;

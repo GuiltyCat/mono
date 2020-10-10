@@ -2,6 +2,72 @@
 #include <math.h>
 #define M_PI 3.14159265358979323846
 
+size_t gcd_inner(size_t d, size_t n) {
+  if (n == 0) {
+    return d;
+  }
+  return gcd_inner(n, d % n);
+}
+
+size_t gcd(size_t d, size_t n) {
+  /*  search a such that m = a*x and n = a*y
+   * d = n * q + r = a * x
+   * thus  q = a* z and r = a * w            */
+  if (d < n) {
+    size_t tmp = n;
+    n          = d;
+    d          = tmp;
+  }
+  return gcd_inner(d, n);
+}
+
+void frac_reduction(Frac* frac) {
+  size_t g = gcd(frac->n, frac->d);
+  frac->n /= g;
+  frac->d /= g;
+}
+
+Frac float2frac(double f) {
+  Frac frac = {.d = 0, .n = 0};
+
+  double ans = f;
+  double i   = 0;
+
+  /* calculate I0 */
+  f           = 1.0 / modf(f, &i);
+  size_t I[2] = {0};
+  I[0]        = i;
+  if (ans == i) {
+    frac.d = 1;
+    frac.n = I[0];
+    return frac;
+  }
+
+  /* calculate I1 */
+  f    = 1.0 / modf(f, &i);
+  I[1] = i;
+
+  size_t n[3] = {I[0], I[0] * I[1] + 1, 0};
+  size_t d[3] = {1, I[1], 0};
+  n[2]        = n[1];
+  d[2]        = d[1];
+
+  while ((double)n[2] / d[2] != ans) {
+    // printf("%f -> %lu/%lu = %f\n", ans, n[2], d[2], (double)n[2] / d[2]);
+    f    = 1.0 / modf(f, &i);
+    n[2] = i * n[1] + n[0];
+    n[0] = n[1];
+    n[1] = n[2];
+    d[2] = i * d[1] + d[0];
+    d[0] = d[1];
+    d[1] = d[2];
+  }
+  frac.n = n[2];
+  frac.d = d[2];
+  frac_reduction(&frac);
+  return frac;
+}
+
 size_t sec_to_length(double sec, uint32_t sampling_freq) {
   return sec * sampling_freq;
 }
@@ -459,12 +525,7 @@ double read_note(int num, FILE* fp, double A4) {
 }
 
 double read_shift(FILE* fp, double freq, int sign) {
-  if (freq < 0) {
-    printf("read shif == -1\n");
-  } else {
-    printf("read shif == +1\n");
-  }
-  int shift = sign* 2 * read_float(fp);
+  int shift = sign * 2 * read_float(fp);
   printf("freq = %f, shift = %d\n", freq, shift);
   return note_shift(freq, shift);
 }
@@ -521,7 +582,7 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
   n->i      = 0;
   // n->till   = n->length * chunk[key_value('t')].value;
   n->till = n->length - sampling_freq * chunk[key_value('t')].value;
-  printf("n->till = %lu, n->period = %lu\n",n->till,n->period);
+  printf("n->till = %lu, n->period = %lu\n", n->till, n->period);
   n->till = n->till - n->till % n->period;
   switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
@@ -605,7 +666,11 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
       }
       int t = key_value('t');
       if (chunk[t].sign == 1) {
+        printf("t: %f ->", chunk[t].value);
         chunk[t].value = chunk[key_value('l')].value - chunk[t].value;
+        printf(" %f\n", chunk[t].value);
+      } else {
+        printf("sign != 1\n");
       }
       MonoMusic0InsertChunk0(mm0, chunk);
       if (c == EOF) {
@@ -648,8 +713,12 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   Wav* w = WavInit(length, mm0->sampling_freq);
   for (List0* l = head; l != NULL; l = l->next) {
     Node0* n = l->node;
-    printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
-           n->volume);
+    if (n == NULL) {
+      printf("l->node == NULL\n");
+      break;
+    }
+    // printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
+    // n->volume);
     // for (size_t i = 0; i < n->length; i++) {
     for (size_t i = 0; i < n->till; i++) {
       // printf("i=%lu\n",n->i);

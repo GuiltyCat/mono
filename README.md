@@ -17,15 +17,19 @@ Usage
 Definition of mm0
 ----------------
 
+```
 <score>=<sound>|<sound>,<mm0>
 <sound>={<chunk>}*
 <chunk>=s<frac>|l<frac>|t<frac>|w<frac>|m<frac>|v<frac>|p<frac>|[a-g][0-9]{#b}
 <frac>={+|-}{<float>}{/}{<float>}
 <float>={0-9}*{.}{0-9}*
+```
 
 For example,
 
+```
 s0l0.3t.9w0m0.5v0.3p440,a4,s+c5
+```
 
 This is three sounds example.
 
@@ -114,7 +118,7 @@ the sound of its chunk start from end of previous chunk minus frac of current ch
                -frac           A
                                count from here
                |------------------------|
-               A      currentt
+               A      current
               start from here
 ```
 
@@ -228,3 +232,4 @@ You can use these expression.
 +1/2
 
 ```
+

@@ -30,4 +30,11 @@ typedef struct MonoMusic0 MonoMusic0;
 MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq, double A4, double bpm);
 int         mono_music0_wav(FILE* fp, MonoMusic0* mm0);
 
+typedef struct {
+  /* n/d */
+  size_t n;
+  size_t d;
+} Frac;
+
+Frac float2frac(double f);
 #endif
