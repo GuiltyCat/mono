@@ -71,6 +71,7 @@ Frac float2frac(double f) {
 size_t sec_to_length(double sec, uint32_t sampling_freq) {
   return sec * sampling_freq;
 }
+
 Wav* WavInit(size_t len, size_t sampling_freq) {
   Wav* wav = (Wav*)calloc(sizeof(Wav) + sizeof(int16_t) * len, 1);
   if (wav == NULL) {
@@ -199,14 +200,18 @@ typedef struct Node0 Node0;
 typedef struct List0 List0;
 struct Node0 {
   /* all value is converted to integer by sampling freq */
-  size_t start;  /* absolute */
-  size_t period; /* absolute */
+  size_t start;      /* absolute */
+  size_t lcm_period; /* absolute */
+  // size_t deno_period; /* absolute */
+  double freq; /* absolute */
+  // size_t period; /* absolute */
   size_t length; /* absolute */
   double volume; /* absolute */
   size_t i;      /* index for next */
-  size_t midway; /* used for pulse wave */
+  // size_t midway; /* used for pulse wave */
+  double midway; /* used for pulse wave */
   size_t till;   /* sec */
-  double (*wave)(Node0* node);
+  double (*wave)(Node0* node, size_t sampling_freq);
 };
 
 struct List0 {
@@ -253,38 +258,50 @@ int get_next(FILE* fp) {
 //   /* saw tooth Wave */
 //   return 2.0*((double)n->i / (double)n->period) - 1.0;
 // }
-double Swave(Node0* n) {
+double Swave(Node0* n, size_t sampling_freq) {
   /* sine wave */
-  return (double)sin(2 * M_PI * n->i / n->period);
+  return (double)sin(2 * M_PI * n->freq * n->i / sampling_freq);
 }
-double Pwave(Node0* n) {
+double Pwave(Node0* n, size_t sampling_freq) {
   /* pulse wave */
-  /* |--------| n->period
-   * |-----|__| n->midway + (n->period - n->midway) */
-  // printf("%f\n", n->i <= n->midway ? (double)n->midway/(double)n->period : -1
-  // + (double)n->midway/(double)n->period);
-  return n->i <= n->midway ? (double)n->midway / (double)n->period
-                           : -1 + (double)n->midway / (double)n->period;
-  // return n->i <= n->midway ? n->midway : -1 + n->midway;
+  /* |--------| 1.0/n->freq = period
+   * |-----|__| n->midway*period  |  (period - n->midway*period)
+   * Both sides of areas should be equal to 1 * period/2 = period/2.
+   * |----|____| 1 to -1 mid point is period/2.
+   *
+   * n->midway*period * left_height = period /2.
+   * left_height = 1/(2*n->midway)
+   * right_height = - 1/(2*(1-n->midway))
+   */
+  double period = sampling_freq / n->freq;
+  return fmod(n->i, period) <= n->midway * period
+             ? (double)1.0 / (2 * n->midway)
+             : -1.0 / (2 * (1.0 - n->midway));
 }
 
-double Twave(Node0* n) {
+double Twave(Node0* n, size_t sampling_freq) {
   /* triangle wave */
   /* |------| n->length
-   * |///\\\| n->midway + (n->period - n->midway)
+   * |///\\\| n->midway*period  /\  (period - n->midway*period)
    * then shift phase in order to start from and end with 0.
+   * Inclination of left up line is 2.0/(period - n->midway*period).
+   * (y is -1 to 1 and x is 0 to period - n->midway*period).
+   * Inclination of right down line is 2.0/(n->midway*period).
+   * (y is 1 to -1 and x is period - n->midway*period to period )
    * */
-
-  size_t i = n->i + n->midway / 2;
-  return i <= n->midway ? 2.0 * ((double)i / (double)n->midway) - 1.0
-                        : 1.0 - 2.0 * (double)(n->period - i) /
-                                    (double)(n->period - n->midway);
+  double period = sampling_freq / n->freq;
+  double i      = fmod(n->i, period);
+  return i - period * n->midway / 2.0 <= n->midway * period
+             ? 2.0 * i / ((1 - n->midway) * period) - 1.0
+             : 1.0 - 2.0 * i / (n->midway * period);
+  //: 1.0 - 2.0 * (double)(n->freq - i) / (double)(n->midway * period);
 }
 
-double Node0Next(Node0* n) {
-  n->i %= n->period;
+double Node0Next(Node0* n, size_t sampling_freq) {
+  n->i %= n->lcm_period;
+  // n->i %= n->period;
   // double ret = n->volume * Zwave(n);
-  double ret = n->volume * n->wave(n);
+  double ret = n->volume * n->wave(n, sampling_freq);
   n->i++;
   return ret;
 }
@@ -572,18 +589,27 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
     PRINT_ERROR("n == NULL");
     return NULL;
   }
-  n->start  = chunk[key_value('s')].value * sampling_freq;
-  n->period = round(sampling_freq / chunk[key_value('p')].value);
+  n->start = chunk[key_value('s')].value * sampling_freq;
+  n->freq  = chunk[key_value('p')].value;
+  /* 1/s * n = 1/f * d */
+  printf("samp/freq=%lu/%f = %f\n", sampling_freq, n->freq,
+         sampling_freq / n->freq);
+  Frac frac = float2frac(sampling_freq / n->freq);
+  printf("frac = %lu/%lu\n", frac.n, frac.d);
+  // n->lcm_period =  frac.n;
+  n->lcm_period = sampling_freq * frac.d;
+  // n->period = round(sampling_freq / chunk[key_value('p')].value);
   n->length = chunk[key_value('l')].value * sampling_freq;
   /* end of wave must be 0 really works? */
   // n->length = n->length - n->length % n->period;
   n->volume = max_volume * chunk[key_value('v')].value;
-  n->midway = n->period * chunk[key_value('m')].value;
+  // n->midway = n->period * chunk[key_value('m')].value;
+  n->midway = chunk[key_value('m')].value;
   n->i      = 0;
   // n->till   = n->length * chunk[key_value('t')].value;
   n->till = n->length - sampling_freq * chunk[key_value('t')].value;
-  printf("n->till = %lu, n->period = %lu\n", n->till, n->period);
-  n->till = n->till - n->till % n->period;
+  // printf("n->till = %lu, n->period = %lu\n", n->till, n->period);
+  // n->till = n->till - n->till % n->period;
   switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
     case 1: n->wave = Pwave; break;
@@ -719,10 +745,10 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     }
     // printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
     // n->volume);
-    // for (size_t i = 0; i < n->length; i++) {
-    for (size_t i = 0; i < n->till; i++) {
+    for (size_t i = 0; i < n->length; i++) {
+      // for (size_t i = 0; i < n->till; i++) {
       // printf("i=%lu\n",n->i);
-      int value = Node0Next(n);
+      int value = Node0Next(n, mm0->sampling_freq);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
         printf("OVERFLOW OCCURED: %lu\n", i);
         goto SKIP_FOR;
@@ -747,7 +773,7 @@ bool test_swave(void) {
   chunk[key_value('v')].value = 1;
   Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
   for (size_t i = 0; i < sampling_freq * sec; i++) {
-    double s0 = Node0Next(n);
+    double s0 = Node0Next(n, sampling_freq);
     double s1 = sin(2 * M_PI * i / sampling_freq * 440);
     printf("%lu  %f %f\n", i, s0, s1);
   }
