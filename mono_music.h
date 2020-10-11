@@ -23,11 +23,13 @@ int  WavWrite(FILE* fp, Wav* wav);
 
 bool WaveTest(void);
 
-
 struct MonoMusic0;
 typedef struct MonoMusic0 MonoMusic0;
 
-MonoMusic0* mono_music0_parse(FILE* fp, size_t sampling_freq, double A4, double bpm);
+MonoMusic0* mono_music0_parse(FILE*  fp,
+                              size_t sampling_freq,
+                              double A4,
+                              double bpm);
 int         mono_music0_wav(FILE* fp, MonoMusic0* mm0);
 
 typedef struct {
