@@ -384,7 +384,7 @@ int key_value(char key) {
     case '>': return 21;
     default:
       PRINT_ERROR("such key is not expected.");
-      printf("key=%c:%d\n", key, key);
+      // printf("key=%c:%d\n", key, key);
       return -1;
   }
 }
@@ -543,7 +543,7 @@ double read_note(int num, FILE* fp, double A4) {
 
 double read_shift(FILE* fp, double freq, int sign) {
   int shift = sign * 2 * read_float(fp);
-  printf("freq = %f, shift = %d\n", freq, shift);
+  // printf("freq = %f, shift = %d\n", freq, shift);
   return note_shift(freq, shift);
 }
 
@@ -592,10 +592,10 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
   n->start = chunk[key_value('s')].value * sampling_freq;
   n->freq  = chunk[key_value('p')].value;
   /* 1/s * n = 1/f * d */
-  printf("samp/freq=%lu/%f = %f\n", sampling_freq, n->freq,
-         sampling_freq / n->freq);
+  // printf("samp/freq=%lu/%f = %f\n", sampling_freq, n->freq, sampling_freq /
+  // n->freq);
   Frac frac = float2frac(sampling_freq / n->freq);
-  printf("frac = %lu/%lu\n", frac.n, frac.d);
+  // printf("frac = %lu/%lu\n", frac.n, frac.d);
   // n->lcm_period =  frac.n;
   n->lcm_period = sampling_freq * frac.d;
   // n->period = round(sampling_freq / chunk[key_value('p')].value);
@@ -616,8 +616,8 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
     case 2: n->wave = Twave; break;
     default:
       PRINT_ERROR("such wave does not expected.");
-      perror("such w does not exist.");
-      printf("w=%f\n", chunk[key_value('w')].value);
+      PRINT_ERROR("such w does not exist.");
+      // printf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
   // printf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period,
@@ -666,7 +666,7 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
 
   /* second per beats */
   double spb = 60.0 / bpm;
-  printf("spb = %f\n", spb);
+  // printf("spb = %f\n", spb);
 
   Chunk0 chunk[7]             = {0};
   chunk[key_value('s')].value = 0;
@@ -692,11 +692,11 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
       }
       int t = key_value('t');
       if (chunk[t].sign == 1) {
-        printf("t: %f ->", chunk[t].value);
+        // printf("t: %f ->", chunk[t].value);
         chunk[t].value = chunk[key_value('l')].value - chunk[t].value;
-        printf(" %f\n", chunk[t].value);
+        // printf(" %f\n", chunk[t].value);
       } else {
-        printf("sign != 1\n");
+        // printf("sign != 1\n");
       }
       MonoMusic0InsertChunk0(mm0, chunk);
       if (c == EOF) {
@@ -740,7 +740,7 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   for (List0* l = head; l != NULL; l = l->next) {
     Node0* n = l->node;
     if (n == NULL) {
-      printf("l->node == NULL\n");
+      PRINT_ERROR("l->node == NULL\n");
       break;
     }
     // printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
@@ -750,7 +750,7 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
       // printf("i=%lu\n",n->i);
       int value = Node0Next(n, mm0->sampling_freq);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
-        printf("OVERFLOW OCCURED: %lu\n", i);
+        // printf("OVERFLOW OCCURED: %lu\n", i);
         goto SKIP_FOR;
       }
       WAV_AT(w, n->start + i) += value;
@@ -763,20 +763,42 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   WavFree(w);
   return ret;
 }
-
-bool test_swave(void) {
+bool print_wave(int wave_type, FILE* fp) {
   size_t sampling_freq        = 80000;
-  double sec                  = 0.10;
-  Chunk0 chunk[6]             = {0};
+  double sec                  = 0.03;
+  Chunk0 chunk[7]             = {0};
+  chunk[key_value('s')].value = 0;
   chunk[key_value('p')].value = 440;
   chunk[key_value('l')].value = sec * sampling_freq;
   chunk[key_value('v')].value = 1;
+  chunk[key_value('m')].value = 0.5;
+  chunk[key_value('t')].value = 0;
+  chunk[key_value('w')].value = wave_type;
   Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
   for (size_t i = 0; i < sampling_freq * sec; i++) {
     double s0 = Node0Next(n, sampling_freq);
-    double s1 = sin(2 * M_PI * i / sampling_freq * 440);
-    printf("%lu  %f %f\n", i, s0, s1);
+    // double s1 = sin(2 * M_PI * i / sampling_freq * 440);
+    fprintf(fp, "%lu %f\n", i, s0);
+    // fprintf(fp, "%lu  %f %f\n", i, s0, s1);
   }
   free(n);
+  return true;
+}
+bool plot_wave(void) {
+  FILE* pp = popen("gnuplot -p", "w");
+  // FILE* pp = stdout;
+  if (pp == NULL) {
+    perror("gnuplot does not exist.");
+    return false;
+  }
+  fprintf(pp, "plot ");
+  fprintf(pp, "'-' using 1:2 with lines title 'wave%d',", 0);
+  fprintf(pp, "'-' using 1:2 with lines title 'wave%d',", 1);
+  fprintf(pp, "'-' using 1:2 with lines title 'wave%d'\n", 2);
+  for (int i = 0; i < 3; i++) {
+    print_wave(i, pp);
+    fprintf(pp, "e\n");
+  }
+  pclose(pp);
   return true;
 }

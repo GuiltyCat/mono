@@ -84,9 +84,11 @@ bool parse_args(int argc, char* argv[], Args* args) {
   return true;
 }
 
-bool test_swave(void);
+bool plot_wave(void) ;
 
 int main(int argc, char* argv[]) {
+  plot_wave();
+  return 0;
   // test_swave();
   // return 0;
   Args args = {NULL, NULL, 440, 60};
