@@ -284,17 +284,28 @@ double Twave(Node0* n, size_t sampling_freq) {
   /* |------| n->length
    * |///\\\| n->midway*period  /\  (period - n->midway*period)
    * then shift phase in order to start from and end with 0.
-   * Inclination of left up line is 2.0/(period - n->midway*period).
+   * Inclination of left up line is 2.0/(n->midway*period).
    * (y is -1 to 1 and x is 0 to period - n->midway*period).
-   * Inclination of right down line is 2.0/(n->midway*period).
+   * Inclination of right down line is 2.0/((1-n->midway)*period).
    * (y is 1 to -1 and x is period - n->midway*period to period )
+   * And calculate bias.
+   * left lines bias is simply -1.
+   * right lines bias is little bit difficult.
+   * left and right lines cross at (m*period, 1).
+   * This means that right line starts from (m*period, 1).
+   * Thus right line can be expressed as
+   * y - 1 = 2/((1-midway)*period) ( x - m*period )
+   * Bias is y's value when x = 0.
+   * Substitute 0 for x.
+   * y - 1 = 2/((1-midway)*period) ( - m*period )
+   * y = 1 + 2/((1-midway))
+   * This is bias of right line.
    * */
   double period = sampling_freq / n->freq;
-  double i      = fmod(n->i, period);
-  return i - period * n->midway / 2.0 <= n->midway * period
-             ? 2.0 * i / ((1 - n->midway) * period) - 1.0
-             : 1.0 - 2.0 * i / (n->midway * period);
-  //: 1.0 - 2.0 * (double)(n->freq - i) / (double)(n->midway * period);
+  double i      = fmod(n->i + n->midway * period / 2.0, period);
+  return i <= n->midway * period ? 2.0 * i / (n->midway * period) - 1.0
+                                 : 1.0 + 2.0 * n->midway / (1.0 - n->midway) -
+                                       2.0 * i / ((1.0 - n->midway) * period);
 }
 
 double Node0Next(Node0* n, size_t sampling_freq) {
@@ -763,27 +774,26 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   WavFree(w);
   return ret;
 }
-bool print_wave(int wave_type, FILE* fp) {
+bool print_wave(int wave_type, double m, FILE* fp) {
   size_t sampling_freq        = 80000;
-  double sec                  = 0.03;
+  double sec                  = 0.01;
   Chunk0 chunk[7]             = {0};
   chunk[key_value('s')].value = 0;
   chunk[key_value('p')].value = 440;
   chunk[key_value('l')].value = sec * sampling_freq;
   chunk[key_value('v')].value = 1;
-  chunk[key_value('m')].value = 0.5;
+  chunk[key_value('m')].value = m;
   chunk[key_value('t')].value = 0;
   chunk[key_value('w')].value = wave_type;
   Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
   for (size_t i = 0; i < sampling_freq * sec; i++) {
     double s0 = Node0Next(n, sampling_freq);
-    // double s1 = sin(2 * M_PI * i / sampling_freq * 440);
     fprintf(fp, "%lu %f\n", i, s0);
-    // fprintf(fp, "%lu  %f %f\n", i, s0, s1);
   }
   free(n);
   return true;
 }
+
 bool plot_wave(void) {
   FILE* pp = popen("gnuplot -p", "w");
   // FILE* pp = stdout;
@@ -791,14 +801,21 @@ bool plot_wave(void) {
     perror("gnuplot does not exist.");
     return false;
   }
+  double m = 1.0;
+  // FILE* tmp = pp;
+  // pp = stdout;
   fprintf(pp, "plot ");
-  fprintf(pp, "'-' using 1:2 with lines title 'wave%d',", 0);
-  fprintf(pp, "'-' using 1:2 with lines title 'wave%d',", 1);
-  fprintf(pp, "'-' using 1:2 with lines title 'wave%d'\n", 2);
-  for (int i = 0; i < 3; i++) {
-    print_wave(i, pp);
-    fprintf(pp, "e\n");
-  }
+  fprintf(pp, "'-' using 1:2 with lines title 'sine wave %d',", 0);
+  fprintf(pp, "'-' using 1:2 with lines title 'pulse wave %d',", 1);
+  fprintf(pp, "'-' using 1:2 with lines title 'triangle wave %d: m=%f'\n", 2,m);
+
+  print_wave(0, 0.5, pp);
+  fprintf(pp, "e\n");
+  print_wave(1, 0.5, pp);
+  fprintf(pp, "e\n");
+  print_wave(2, m, pp);
+  fprintf(pp, "e\n");
+  // pp=tmp;
   pclose(pp);
   return true;
 }
