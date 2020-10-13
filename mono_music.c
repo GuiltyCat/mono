@@ -756,8 +756,8 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     }
     // printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
     // n->volume);
-    for (size_t i = 0; i < n->length; i++) {
-      // for (size_t i = 0; i < n->till; i++) {
+    //for (size_t i = 0; i < n->length; i++) {
+       for (size_t i = 0; i < n->till; i++) {
       // printf("i=%lu\n",n->i);
       int value = Node0Next(n, mm0->sampling_freq);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
