@@ -5,6 +5,19 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef DEBUG
+#define eprintf(...) fprintf(stderr, __VA_ARGS__)
+#define PRINT_ERROR(...) \
+  fprintf(stderr, "error:%s:%s:%d:", __FILE__, __func__, __LINE__, s);fprintf(stderr,__VA_ARGS__)
+#define PRINT_DEBUG(s) \
+  fprintf(stderr, "debug:%s:%s:%d:", __FILE__, __func__, __LINE__, s);fprintf(stderr,__VA_ARGS__)
+#else
+#include<assert.h>
+#define eprintf(...) (void)(0)
+#define PRINT_ERROR(...) (void)(0)
+#define PRINT_ERROR(...) (void)(0)
+
+#endif
 
 typedef struct {
   unsigned bit_size;

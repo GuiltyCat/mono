@@ -53,7 +53,7 @@ Frac float2frac(double f) {
   d[2]        = d[1];
 
   while ((double)n[2] / d[2] != ans) {
-    // printf("%f -> %lu/%lu = %f\n", ans, n[2], d[2], (double)n[2] / d[2]);
+    // eprintf("%f -> %lu/%lu = %f\n", ans, n[2], d[2], (double)n[2] / d[2]);
     f    = 1.0 / modf(f, &i);
     n[2] = i * n[1] + n[0];
     n[0] = n[1];
@@ -111,9 +111,9 @@ int WavWrite(FILE* fp, Wav* wav) {
   for (int i = 0; i < 4; i++) {
     header[4 + i] = (chunk_size >> i * 8) & 0xFF;
   }
-  // printf("header_size=%d\n", 4 + 24 + 8);
-  // printf("data size = %lu\n", wav->length * (wav->bit_size / 8));
-  // printf("chunk_size=%d\n", chunk_size);
+  // eprintf("header_size=%d\n", 4 + 24 + 8);
+  // eprintf("data size = %lu\n", wav->length * (wav->bit_size / 8));
+  // eprintf("chunk_size=%d\n", chunk_size);
 
   /* Format */
   header[8]  = 'W';
@@ -176,7 +176,7 @@ int WavWrite(FILE* fp, Wav* wav) {
   for (int i = 0; i < 4; i++) {
     header[40 + i] = (uint8_t)(subchunk2size >> i * 8) & 0xFF;
   }
-  // printf("subchunk2size = %d\n", subchunk2size);
+  // eprintf("subchunk2size = %d\n", subchunk2size);
 
   size_t ret;
   ret = fwrite(header, sizeof(uint8_t), sizeof(header) / sizeof(uint8_t), fp);
@@ -187,7 +187,7 @@ int WavWrite(FILE* fp, Wav* wav) {
 
   size_t nmemb = wav->length * wav->bit_size / 8;
   ret          = fwrite(wav->signal, sizeof(uint8_t), nmemb, fp);
-  // printf("nmemb = %lu.\n", nmemb);
+  // eprintf("nmemb = %lu.\n", nmemb);
   if (ret != nmemb) {
     perror("bit_size == 8. fwrite failed.");
     return -1;
@@ -196,9 +196,9 @@ int WavWrite(FILE* fp, Wav* wav) {
   return 0;
 }
 
-typedef struct Node0 Node0;
-typedef struct List0 List0;
-struct Node0 {
+typedef struct Node Node;
+typedef struct List List;
+struct Node {
   /* all value is converted to integer by sampling freq */
   size_t start;      /* absolute */
   size_t lcm_period; /* absolute */
@@ -211,19 +211,19 @@ struct Node0 {
   // size_t midway; /* used for pulse wave */
   double midway; /* used for pulse wave */
   size_t till;   /* sec */
-  double (*wave)(Node0* node, size_t sampling_freq);
+  double (*wave)(Node* node, size_t sampling_freq);
 };
 
-struct List0 {
+struct List {
   /* all node should be ordered by start */
-  List0* next;
-  Node0* node;
+  List* next;
+  Node* node;
 };
 struct MonoMusic0 {
   size_t sampling_freq;
   size_t max_volume;
-  List0* head;
-  List0* tail;
+  List*  head;
+  List*  tail;
 };
 
 int get_next(FILE* fp) {
@@ -244,25 +244,25 @@ int get_next(FILE* fp) {
           } else if (c == '\n') {
             break;
           }
-          // printf("skip %c\n", c);
+          // eprintf("skip %c\n", c);
         }
         continue;
-      default:  // printf("get_next %c\n", c);
+      default:  // eprintf("get_next %c\n", c);
         return c;
     }
   }
 }
 
 /* these alphabet do not change appearance by capital */
-// double Zwave(Node0* n) {
+// double Zwave(Node* n) {
 //   /* saw tooth Wave */
 //   return 2.0*((double)n->i / (double)n->period) - 1.0;
 // }
-double Swave(Node0* n, size_t sampling_freq) {
+double Swave(Node* n, size_t sampling_freq) {
   /* sine wave */
   return (double)sin(2 * M_PI * n->freq * n->i / sampling_freq);
 }
-double Pwave(Node0* n, size_t sampling_freq) {
+double Pwave(Node* n, size_t sampling_freq) {
   /* pulse wave */
   /* |--------| 1.0/n->freq = period
    * |-----|__| n->midway*period  |  (period - n->midway*period)
@@ -279,7 +279,7 @@ double Pwave(Node0* n, size_t sampling_freq) {
              : -1.0 / (2 * (1.0 - n->midway));
 }
 
-double Twave(Node0* n, size_t sampling_freq) {
+double Twave(Node* n, size_t sampling_freq) {
   /* triangle wave */
   /* |------| n->length
    * |///\\\| n->midway*period  /\  (period - n->midway*period)
@@ -308,7 +308,7 @@ double Twave(Node0* n, size_t sampling_freq) {
                                        2.0 * i / ((1.0 - n->midway) * period);
 }
 
-double Node0Next(Node0* n, size_t sampling_freq) {
+double NodeNext(Node* n, size_t sampling_freq) {
   n->i %= n->lcm_period;
   // n->i %= n->period;
   // double ret = n->volume * Zwave(n);
@@ -317,8 +317,8 @@ double Node0Next(Node0* n, size_t sampling_freq) {
   return ret;
 }
 
-List0* List0Insert(List0* l, Node0* node) {
-  List0* next = malloc(sizeof(List0));
+List* ListInsert(List* l, Node* node) {
+  List* next = malloc(sizeof(List));
   if (next == NULL) {
     return NULL;
   }
@@ -333,26 +333,21 @@ List0* List0Insert(List0* l, Node0* node) {
   return next;
 }
 
-void List0Free(List0* l) {
+void ListFree(List* l) {
   if (l == NULL) {
     return;
   }
-  List0* next = l->next;
-  Node0* node = l->node;
+  List* next = l->next;
+  Node* node = l->node;
   if (node != NULL) {
     free(node);
   }
   free(l);
-  List0Free(next);
+  ListFree(next);
 }
 
-#define PRINT_ERROR(s) \
-  printf("error:%s:%s:%d:%s\n", __FILE__, __func__, __LINE__, s)
-#define PRINT_DEBUG(s) \
-  printf("debug:%s:%s:%d:%s\n", __FILE__, __func__, __LINE__, s)
-
 void MonoMusic0Free(MonoMusic0* mm0) {
-  List0Free(mm0->head);
+  ListFree(mm0->head);
   free(mm0);
 }
 
@@ -395,7 +390,7 @@ int key_value(char key) {
     case '>': return 21;
     default:
       PRINT_ERROR("such key is not expected.");
-      // printf("key=%c:%d\n", key, key);
+      // eprintf("key=%c:%d\n", key, key);
       return -1;
   }
 }
@@ -427,7 +422,7 @@ static double read_float(FILE* fp) {
       f = 0;
       continue;
     }
-    // printf("c=%c\n", c);
+    // eprintf("c=%c\n", c);
     switch (c) {
       case '0': num = num * 10 + 0; break;
       case '1': num = num * 10 + 1; break;
@@ -442,25 +437,25 @@ static double read_float(FILE* fp) {
       default:
         if (c != EOF) {
           ungetc(c, fp);
-          // printf("ungetc %c\n", c);
+          // eprintf("ungetc %c\n", c);
         }
         return num == 0 || f == -1 ? num : num / pow(10.0, f);
     }
     f += f == -1 ? 0 : 1;
-    // printf("n=%f, f=%d\n", num, f);
+    // eprintf("n=%f, f=%d\n", num, f);
   }
 }
 
 void read_float_test(void) {
   FILE* fp = fopen("float.txt", "r");
   if (fp == NULL) {
-    perror("fp == NULL");
+    eprintf("fp == NULL");
     return;
   }
   while (!feof(fp)) {
     double num = read_float(fp);
     fgetc(fp);
-    printf("ln=%f\n\n", num);
+    eprintf("ln=%f\n\n", num);
   }
   return;
 }
@@ -544,17 +539,17 @@ double read_note(int num, FILE* fp, double A4) {
   int note = read_scale(num);
   int oct  = read_octave(fp);
   int acc  = read_acc(fp);
-  // printf("note = %d, oct = %d, acc = %d\n",note,oct,acc);
+  // eprintf("note = %d, oct = %d, acc = %d\n",note,oct,acc);
   /* requre A4 freq */
   double base = base_freq_equal_temptation(note + acc, A4);
-  // printf("base = %f\n",base);
-  // printf("oc   = %f\n", octave_shift(base, oct) );
+  // eprintf("base = %f\n",base);
+  // eprintf("oc   = %f\n", octave_shift(base, oct) );
   return octave_shift(base, oct - 4);
 }
 
 double read_shift(FILE* fp, double freq, int sign) {
   int shift = sign * 2 * read_float(fp);
-  // printf("freq = %f, shift = %d\n", freq, shift);
+  // eprintf("freq = %f, shift = %d\n", freq, shift);
   return note_shift(freq, shift);
 }
 
@@ -576,26 +571,24 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
     /* for chunk */
     chunk[i].value = read_fraction(fp, &chunk[i].sign);
   } else if (i < 17) {
-    // printf("c = %d\n",c);
+    // eprintf("c = %d\n",c);
     /* for scale */
     size_t j       = key_value('p');
     chunk[j].value = read_note(i, fp, A4);
-    // printf("read_note = %f\n", chunk[j].value);
+    // eprintf("read_note = %f\n", chunk[j].value);
   } else {
     size_t j       = key_value('p');
     chunk[j].value = read_shift(fp, chunk[j].value, i == 20 ? -1 : 1);
   }
 
-  // printf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
+  // eprintf("%c:chunk[%d] = %f\n", key, i, chunk[i]);
   return true;
   PRINT_ERROR(" you cannot reach here");
   return false;
 }
 
-Node0* Node0InitChunk0(Chunk0 chunk[],
-                       size_t sampling_freq,
-                       size_t max_volume) {
-  Node0* n = malloc(sizeof(Node0));
+Node* NodeInitChunk0(Chunk0 chunk[], size_t sampling_freq, size_t max_volume) {
+  Node* n = malloc(sizeof(Node));
   if (n == NULL) {
     PRINT_ERROR("n == NULL");
     return NULL;
@@ -603,10 +596,10 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
   n->start = chunk[key_value('s')].value * sampling_freq;
   n->freq  = chunk[key_value('p')].value;
   /* 1/s * n = 1/f * d */
-  // printf("samp/freq=%lu/%f = %f\n", sampling_freq, n->freq, sampling_freq /
+  // eprintf("samp/freq=%lu/%f = %f\n", sampling_freq, n->freq, sampling_freq /
   // n->freq);
   Frac frac = float2frac(sampling_freq / n->freq);
-  // printf("frac = %lu/%lu\n", frac.n, frac.d);
+  // eprintf("frac = %lu/%lu\n", frac.n, frac.d);
   // n->lcm_period =  frac.n;
   n->lcm_period = sampling_freq * frac.d;
   // n->period = round(sampling_freq / chunk[key_value('p')].value);
@@ -619,7 +612,7 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
   n->i      = 0;
   // n->till   = n->length * chunk[key_value('t')].value;
   n->till = n->length - sampling_freq * chunk[key_value('t')].value;
-  // printf("n->till = %lu, n->period = %lu\n", n->till, n->period);
+  // eprintf("n->till = %lu, n->period = %lu\n", n->till, n->period);
   // n->till = n->till - n->till % n->period;
   switch ((int)chunk[key_value('w')].value) {
     case 0: n->wave = Swave; break;
@@ -628,10 +621,10 @@ Node0* Node0InitChunk0(Chunk0 chunk[],
     default:
       PRINT_ERROR("such wave does not expected.");
       PRINT_ERROR("such w does not exist.");
-      // printf("w=%f\n", chunk[key_value('w')].value);
+      // eprintf("w=%f\n", chunk[key_value('w')].value);
       break;
   }
-  // printf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period,
+  // eprintf("s=%lu, l=%lu, p=%lu, m=%lu, v=%f\n", n->start, n->period,
   // n->midway,
   //        n->length, n->volume);
   return n;
@@ -642,14 +635,14 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
     PRINT_ERROR("mm0 == NULL");
     return false;
   }
-  Node0* n = Node0InitChunk0(chunk, mm0->sampling_freq, mm0->max_volume);
+  Node* n = NodeInitChunk0(chunk, mm0->sampling_freq, mm0->max_volume);
   if (n == NULL) {
     PRINT_ERROR("n == NULL");
     return false;
   }
-  // printf("List0Insert\n");
-  List0* next = List0Insert(mm0->tail, n);
-  // printf("next = %p\n", next);
+  // eprintf("ListInsert\n");
+  List* next = ListInsert(mm0->tail, n);
+  // eprintf("next = %p\n", next);
   mm0->tail = next;
   if (next == NULL) {
     PRINT_ERROR("next == NULL");
@@ -677,7 +670,7 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
 
   /* second per beats */
   double spb = 60.0 / bpm;
-  // printf("spb = %f\n", spb);
+  // eprintf("spb = %f\n", spb);
 
   Chunk0 chunk[7]             = {0};
   chunk[key_value('s')].value = 0;
@@ -703,11 +696,11 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
       }
       int t = key_value('t');
       if (chunk[t].sign == 1) {
-        // printf("t: %f ->", chunk[t].value);
+        // eprintf("t: %f ->", chunk[t].value);
         chunk[t].value = chunk[key_value('l')].value - chunk[t].value;
-        // printf(" %f\n", chunk[t].value);
+        // eprintf(" %f\n", chunk[t].value);
       } else {
-        // printf("sign != 1\n");
+        // eprintf("sign != 1\n");
       }
       MonoMusic0InsertChunk0(mm0, chunk);
       if (c == EOF) {
@@ -732,48 +725,49 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
 }
 
 int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
-  List0* tail = mm0->tail;
-  List0* head = mm0->head;
+  List* tail = mm0->tail;
+  List* head = mm0->head;
   if (tail == NULL || head == NULL) {
     PRINT_ERROR("tail == NULL || head == NULL");
     return -1;
   }
   size_t length = 0;
-  for (List0* l = head; l != NULL; l = l->next) {
-    Node0* n = l->node;
+  for (List* l = head; l != NULL; l = l->next) {
+    Node* n = l->node;
     if (n->start + n->length > length) {
       length = n->start + n->length;
     }
   }
-  // printf("start = %lu\n", tail->node->start);
-  // printf("length = %lu\n", tail->node->length);
+  // eprintf("start = %lu\n", tail->node->start);
+  // eprintf("length = %lu\n", tail->node->length);
   Wav* w = WavInit(length, mm0->sampling_freq);
-  for (List0* l = head; l != NULL; l = l->next) {
-    Node0* n = l->node;
+  for (List* l = head; l != NULL; l = l->next) {
+    Node* n = l->node;
     if (n == NULL) {
       PRINT_ERROR("l->node == NULL\n");
       break;
     }
-    // printf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
+    // eprintf("s=%lu, p=%lu, l=%lu, v=%f\n", n->start, n->period, n->length,
     // n->volume);
-    //for (size_t i = 0; i < n->length; i++) {
-       for (size_t i = 0; i < n->till; i++) {
-      // printf("i=%lu\n",n->i);
-      int value = Node0Next(n, mm0->sampling_freq);
+    // for (size_t i = 0; i < n->length; i++) {
+    for (size_t i = 0; i < n->till; i++) {
+      // eprintf("i=%lu\n",n->i);
+      int value = NodeNext(n, mm0->sampling_freq);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
-        // printf("OVERFLOW OCCURED: %lu\n", i);
+        // eprintf("OVERFLOW OCCURED: %lu\n", i);
         goto SKIP_FOR;
       }
       WAV_AT(w, n->start + i) += value;
-      // printf("%lu:%d\n",i, WAV_AT(w, n->start + i));
+      // eprintf("%lu:%d\n",i, WAV_AT(w, n->start + i));
     }
   SKIP_FOR:;
   }
-  putchar('\n');
+  //putchar('\n');
   int ret = WavWrite(fp, w);
   WavFree(w);
   return ret;
 }
+
 bool print_wave(int wave_type, double m, FILE* fp) {
   size_t sampling_freq        = 80000;
   double sec                  = 0.01;
@@ -785,9 +779,9 @@ bool print_wave(int wave_type, double m, FILE* fp) {
   chunk[key_value('m')].value = m;
   chunk[key_value('t')].value = 0;
   chunk[key_value('w')].value = wave_type;
-  Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
+  Node* n                     = NodeInitChunk0(chunk, sampling_freq, 1);
   for (size_t i = 0; i < sampling_freq * sec; i++) {
-    double s0 = Node0Next(n, sampling_freq);
+    double s0 = NodeNext(n, sampling_freq);
     fprintf(fp, "%lu %f\n", i, s0);
   }
   free(n);
@@ -807,7 +801,8 @@ bool plot_wave(void) {
   fprintf(pp, "plot ");
   fprintf(pp, "'-' using 1:2 with lines title 'sine wave %d',", 0);
   fprintf(pp, "'-' using 1:2 with lines title 'pulse wave %d',", 1);
-  fprintf(pp, "'-' using 1:2 with lines title 'triangle wave %d: m=%f'\n", 2,m);
+  fprintf(pp, "'-' using 1:2 with lines title 'triangle wave %d: m=%f'\n", 2,
+          m);
 
   print_wave(0, 0.5, pp);
   fprintf(pp, "e\n");

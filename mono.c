@@ -2,9 +2,13 @@
 #include "mono_image.h"
 #include "mono_music.h"
 
+//#define eprintf( ...) fprintf(stderr,  __VA_ARGS__)
+
 typedef struct {
-  char*  input_file_name;
-  char*  output_file_name;
+  FILE* input;
+  FILE* output;
+  // char*  input_file_name;
+  // char*  output_file_name;
   double A4;
   double bpm;
 } Args;
@@ -14,7 +18,7 @@ typedef struct {
 void print_help(void) {
   FILE* fp = fopen("README.md", "r");
   if (fp == NULL) {
-    printf("failed to open README.md\n");
+    eprintf("failed to open README.md\n");
     return;
   }
   int c;
@@ -58,11 +62,22 @@ bool parse_args(int argc, char* argv[], Args* args) {
       continue;
     }
     s++;
+    char* file_name;
     switch (*s) {
       case 'o':
-        args->output_file_name = s[1] == '\0' ? argv[++i] : &s[2];
+        file_name    = s[1] == '\0' ? argv[++i] : &s[2];
+        args->output = fopen(file_name, "w");
+        if (args->output == NULL) {
+          perror("such output does not exist.");
+        }
         break;
-      case 'i': args->input_file_name = s[1] == '\0' ? argv[++i] : &s[2]; break;
+      case 'i':
+        file_name   = s[1] == '\0' ? argv[++i] : &s[2];
+        args->input = fopen(file_name, "r");
+        if (args->input == NULL) {
+          perror("such input does not exist.");
+        }
+        break;
       case 'h': print_help(); return false;
       case 'p':
         args->A4 = s[1] == '\0' ? read_float(argv[++i]) : read_float(&s[2]);
@@ -70,55 +85,41 @@ bool parse_args(int argc, char* argv[], Args* args) {
       case 'b':
         args->bpm = s[1] == '\0' ? read_float(argv[++i]) : read_float(&s[2]);
         break;
-      default: printf("unsupported option: -%c \n", argv[i][1]); return false;
+      default: eprintf("unsupported option: -%c \n", argv[i][1]); return false;
     }
   }
-  if (args->input_file_name == NULL) {
-    printf("-i <input_file_name>\n");
-    return false;
-  }
-  if (args->output_file_name == NULL) {
-    printf("-o <output_file_name>\n");
-    return false;
-  }
+  // if (args->input_file_name == NULL) {
+  //   eprintf("-i <input_file_name>\n");
+  //   return false;
+  // }
+  // if (args->output_file_name == NULL) {
+  //   eprintf("-o <output_file_name>\n");
+  //   return false;
+  // }
   return true;
 }
 
-bool plot_wave(void) ;
+bool plot_wave(void);
 
 int main(int argc, char* argv[]) {
-  //plot_wave();
-  //return 0;
-  Args args = {NULL, NULL, 440, 60};
+  // plot_wave();
+  // return 0;
+  Args args = {.input = stdin, .output = stdout, .A4 = 440, .bpm = 60};
   if (parse_args(argc, argv, &args) == false) {
     return 0;
   }
-  printf("input = %s, output = %s, A4 = %f\n", args.input_file_name,
-         args.output_file_name, args.A4);
-  FILE* fp = NULL;
-  fp       = fopen(args.input_file_name, "r");
-  if (fp == NULL) {
-    perror("file open failed.");
-    printf("%s\n", args.input_file_name);
-    return 0;
-  }
-  MonoMusic0* mm0 = mono_music0_parse(fp, 80000, args.A4, args.bpm);
+  MonoMusic0* mm0 = mono_music0_parse(args.input, 80000, args.A4, args.bpm);
   if (mm0 == NULL) {
     perror("mm0 == NULL failed.");
     return 0;
   }
-  fclose(fp);
-  if (args.output_file_name == NULL || args.output_file_name[0] == '-') {
-    fp = stdout;
-  } else {
-    fp = fopen(args.output_file_name, "wb");
+  if (args.input != stdin) {
+    fclose(args.input);
   }
-  if (fp == NULL) {
-    perror("wav file open failed.");
-    return 0;
+  mono_music0_wav(args.output, mm0);
+  if (args.output != stdout) {
+    fclose(args.output);
   }
-  mono_music0_wav(fp, mm0);
-  fclose(fp);
 
   return 0;
 }
