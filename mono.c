@@ -1,3 +1,4 @@
+#define DEBUG
 #include <math.h>
 #include "mono_image.h"
 #include "mono_music.h"
@@ -100,15 +101,73 @@ bool parse_args(int argc, char* argv[], Args* args) {
 }
 
 bool plot_wave(void);
+#ifdef __linux__
 
-int main(int argc, char* argv[]) {
+/* https://www.alsa-project.org/alsa-doc/alsa-lib/_2test_2pcm_min_8c-example.html */
+#include <alsa/asoundlib.h>
+int play_music(Wav* wav) {
+  int err;
+
+  snd_pcm_t*        handle;
+  snd_pcm_sframes_t frames;
+  err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+  if (err < 0) {
+    perror("snd_pcm_open failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+
+  int          soft_resample = 1;      /* allow resampling */
+  unsigned int latency       = 500000; /* 0.5 [sec] */
+
+  err = snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE,
+                           SND_PCM_ACCESS_RW_INTERLEAVED, wav->nchannel,
+                           wav->sampling_freq, soft_resample, latency);
+  if (err < -1) {
+    perror("snd_pcm_set_params failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+
+  /* write */
+
+  frames = snd_pcm_writei(handle, wav->signal, wav->length);
+  if (frames < 0) {
+	  frames = snd_pcm_recover(handle, frames, 0);
+  }
+  if (frames < 0) {
+    perror("snd_pcm_writei failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+
+  err = snd_pcm_drain(handle);
+  if (err < 0) {
+    perror("snd_pcm_drain failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+  err = snd_pcm_close(handle);
+  if (err < 0) {
+    perror("snd_pcm_close failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+  return 0;
+}
+
+#endif
+
+Wav* MonoMusic02Wav(MonoMusic0* mm0);
+int  main(int argc, char* argv[]) {
   // plot_wave();
   // return 0;
   Args args = {.input = stdin, .output = stdout, .A4 = 440, .bpm = 60};
   if (parse_args(argc, argv, &args) == false) {
     return 0;
   }
-  MonoMusic0* mm0 = mono_music0_parse(args.input, 80000, args.A4, args.bpm);
+  MonoMusic0* mm0 = MonoMusic0Parse(args.input, 44100, args.A4, args.bpm);
+  // MonoMusic0* mm0 = MonoMusic0Parse(args.input, 80000, args.A4, args.bpm);
   if (mm0 == NULL) {
     perror("mm0 == NULL failed.");
     return 0;
@@ -116,10 +175,17 @@ int main(int argc, char* argv[]) {
   if (args.input != stdin) {
     fclose(args.input);
   }
-  mono_music0_wav(args.output, mm0);
+  if (args.output == stdout) {
+    Wav* wav = MonoMusic02Wav(mm0);
+    play_music(wav);
+    WavFree(wav);
+  } else {
+    MonoMusic0Wav(args.output, mm0);
+  }
   if (args.output != stdout) {
     fclose(args.output);
   }
+  MonoMusic0Free(mm0);
 
   return 0;
 }
