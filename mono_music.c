@@ -196,9 +196,34 @@ int WavWrite(FILE* fp, Wav* wav) {
   return 0;
 }
 
-typedef struct Node Node;
-typedef struct List List;
-struct Node {
+/* version 0 */
+/*
+ * one sound is composed with these parameter below.
+ *
+ * w[0-2]     : kinds of wave.
+ * m{+-}<num> : one of wave parameter. Set middle point of pulse wave and
+ * triangle wave. s{+-}<num> : start time. default num is 0. + starts from
+ * previous sound's start. - starts from -<num> of previous sound's end. l<num>
+ * : length of sound v<num>     : volume of sound 0(min) to 1(max) t{+-}<num> :
+ * + continues sound <num> length. - continues sound (length - <num>) length.
+ * p<num>     : frequency of sound
+ * [a-gA-G][0-9][b#] : frequency of sound. b is flat # is sharp.
+ * [><][0-9]  : shift <num> from previous sound frequency. < is down. > is up.
+ *
+ * if some parameters are omitted, previous sound parameter is used or
+ * automatically completed. For example, if s is omitted, s is set as previous
+ * sound's s + l. This means that s is set as the end of previous sound.
+ *
+ * each sound is separated by , and order of parameter is not considered.
+ *
+ * Sample,
+ * w0s0v.1l1t-0.02m.5p440,<1,<1,<1
+ *
+ */
+
+typedef struct Node0 Node0;
+typedef struct List0 List0;
+struct Node0 {
   /* all value is converted to integer by sampling freq */
   size_t start;      /* absolute */
   size_t lcm_period; /* absolute */
@@ -211,19 +236,20 @@ struct Node {
   // size_t midway; /* used for pulse wave */
   double midway; /* used for pulse wave */
   size_t till;   /* sec */
-  double (*wave)(Node* node, size_t sampling_freq);
+  double (*wave)(Node0* node, size_t sampling_freq);
 };
 
-struct List {
+struct List0 {
   /* all node should be ordered by start */
-  List* next;
-  Node* node;
+  List0* next;
+  Node0* node;
 };
+
 struct MonoMusic0 {
   size_t sampling_freq;
   size_t max_volume;
-  List*  head;
-  List*  tail;
+  List0* head;
+  List0* tail;
 };
 
 int get_next(FILE* fp) {
@@ -254,15 +280,15 @@ int get_next(FILE* fp) {
 }
 
 /* these alphabet do not change appearance by capital */
-// double Zwave(Node* n) {
+// double Zwave(Node0* n) {
 //   /* saw tooth Wave */
 //   return 2.0*((double)n->i / (double)n->period) - 1.0;
 // }
-double Swave(Node* n, size_t sampling_freq) {
+double Swave(Node0* n, size_t sampling_freq) {
   /* sine wave */
   return (double)sin(2 * M_PI * n->freq * n->i / sampling_freq);
 }
-double Pwave(Node* n, size_t sampling_freq) {
+double Pwave(Node0* n, size_t sampling_freq) {
   /* pulse wave */
   /* |--------| 1.0/n->freq = period
    * |-----|__| n->midway*period  |  (period - n->midway*period)
@@ -279,7 +305,7 @@ double Pwave(Node* n, size_t sampling_freq) {
              : -1.0 / (2 * (1.0 - n->midway));
 }
 
-double Twave(Node* n, size_t sampling_freq) {
+double Twave(Node0* n, size_t sampling_freq) {
   /* triangle wave */
   /* |------| n->length
    * |///\\\| n->midway*period  /\  (period - n->midway*period)
@@ -308,7 +334,7 @@ double Twave(Node* n, size_t sampling_freq) {
                                        2.0 * i / ((1.0 - n->midway) * period);
 }
 
-double NodeNext(Node* n, size_t sampling_freq) {
+double Node0Next(Node0* n, size_t sampling_freq) {
   n->i %= n->lcm_period;
   // n->i %= n->period;
   // double ret = n->volume * Zwave(n);
@@ -317,8 +343,8 @@ double NodeNext(Node* n, size_t sampling_freq) {
   return ret;
 }
 
-List* ListInsert(List* l, Node* node) {
-  List* next = malloc(sizeof(List));
+List0* List0Insert(List0* l, Node0* node) {
+  List0* next = malloc(sizeof(List0));
   if (next == NULL) {
     return NULL;
   }
@@ -333,21 +359,21 @@ List* ListInsert(List* l, Node* node) {
   return next;
 }
 
-void ListFree(List* l) {
+void List0Free(List0* l) {
   if (l == NULL) {
     return;
   }
-  List* next = l->next;
-  Node* node = l->node;
+  List0* next = l->next;
+  Node0* node = l->node;
   if (node != NULL) {
     free(node);
   }
   free(l);
-  ListFree(next);
+  List0Free(next);
 }
 
 void MonoMusic0Free(MonoMusic0* mm0) {
-  ListFree(mm0->head);
+  List0Free(mm0->head);
   free(mm0);
 }
 
@@ -453,9 +479,9 @@ void read_float_test(void) {
     return;
   }
   while (!feof(fp)) {
-    double num = read_float(fp);
+    // double num = read_float(fp);
     fgetc(fp);
-    eprintf("ln=%f\n\n", num);
+    // eprintf("ln=%f\n\n", num);
   }
   return;
 }
@@ -587,8 +613,10 @@ bool read_chunk0(FILE* fp, Chunk0 chunk[], double A4, double spb) {
   return false;
 }
 
-Node* NodeInitChunk0(Chunk0 chunk[], size_t sampling_freq, size_t max_volume) {
-  Node* n = malloc(sizeof(Node));
+Node0* Node0InitChunk0(Chunk0 chunk[],
+                       size_t sampling_freq,
+                       size_t max_volume) {
+  Node0* n = malloc(sizeof(Node0));
   if (n == NULL) {
     PRINT_ERROR("n == NULL");
     return NULL;
@@ -635,13 +663,13 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
     PRINT_ERROR("mm0 == NULL");
     return false;
   }
-  Node* n = NodeInitChunk0(chunk, mm0->sampling_freq, mm0->max_volume);
+  Node0* n = Node0InitChunk0(chunk, mm0->sampling_freq, mm0->max_volume);
   if (n == NULL) {
     PRINT_ERROR("n == NULL");
     return false;
   }
-  // eprintf("ListInsert\n");
-  List* next = ListInsert(mm0->tail, n);
+  // eprintf("List0Insert\n");
+  List0* next = List0Insert(mm0->tail, n);
   // eprintf("next = %p\n", next);
   mm0->tail = next;
   if (next == NULL) {
@@ -655,10 +683,10 @@ bool MonoMusic0InsertChunk0(MonoMusic0* mm0, Chunk0 chunk[]) {
   return true;
 }
 
-MonoMusic0* mono_music0_parse(FILE*  fp,
-                              size_t sampling_freq,
-                              double A4,
-                              double bpm) {
+MonoMusic0* MonoMusic0Parse(FILE*  fp,
+                            size_t sampling_freq,
+                            double A4,
+                            double bpm) {
   MonoMusic0* mm0 = malloc(sizeof(MonoMusic0));
   if (mm0 == NULL) {
     return NULL;
@@ -723,17 +751,16 @@ MonoMusic0* mono_music0_parse(FILE*  fp,
   }
   return mm0;
 }
-
-int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
-  List* tail = mm0->tail;
-  List* head = mm0->head;
+Wav* MonoMusic02Wav(MonoMusic0* mm0) {
+  List0* tail = mm0->tail;
+  List0* head = mm0->head;
   if (tail == NULL || head == NULL) {
     PRINT_ERROR("tail == NULL || head == NULL");
-    return -1;
+    return NULL;
   }
   size_t length = 0;
-  for (List* l = head; l != NULL; l = l->next) {
-    Node* n = l->node;
+  for (List0* l = head; l != NULL; l = l->next) {
+    Node0* n = l->node;
     if (n->start + n->length > length) {
       length = n->start + n->length;
     }
@@ -741,8 +768,8 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
   // eprintf("start = %lu\n", tail->node->start);
   // eprintf("length = %lu\n", tail->node->length);
   Wav* w = WavInit(length, mm0->sampling_freq);
-  for (List* l = head; l != NULL; l = l->next) {
-    Node* n = l->node;
+  for (List0* l = head; l != NULL; l = l->next) {
+    Node0* n = l->node;
     if (n == NULL) {
       PRINT_ERROR("l->node == NULL\n");
       break;
@@ -752,7 +779,7 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     // for (size_t i = 0; i < n->length; i++) {
     for (size_t i = 0; i < n->till; i++) {
       // eprintf("i=%lu\n",n->i);
-      int value = NodeNext(n, mm0->sampling_freq);
+      int value = Node0Next(n, mm0->sampling_freq);
       if ((int)WAV_AT(w, n->start + i) + value > INT16_MAX) {
         // eprintf("OVERFLOW OCCURED: %lu\n", i);
         goto SKIP_FOR;
@@ -762,9 +789,17 @@ int mono_music0_wav(FILE* fp, MonoMusic0* mm0) {
     }
   SKIP_FOR:;
   }
-  //putchar('\n');
-  int ret = WavWrite(fp, w);
-  WavFree(w);
+  return w;
+}
+
+int MonoMusic0Wav(FILE* fp, MonoMusic0* mm0) {
+  Wav* wav = MonoMusic02Wav(mm0);
+  if (wav == NULL) {
+    perror("MonoMusic02Wav failed.");
+    return -1;
+  }
+  int ret = WavWrite(fp, wav);
+  WavFree(wav);
   return ret;
 }
 
@@ -779,9 +814,9 @@ bool print_wave(int wave_type, double m, FILE* fp) {
   chunk[key_value('m')].value = m;
   chunk[key_value('t')].value = 0;
   chunk[key_value('w')].value = wave_type;
-  Node* n                     = NodeInitChunk0(chunk, sampling_freq, 1);
+  Node0* n                    = Node0InitChunk0(chunk, sampling_freq, 1);
   for (size_t i = 0; i < sampling_freq * sec; i++) {
-    double s0 = NodeNext(n, sampling_freq);
+    double s0 = Node0Next(n, sampling_freq);
     fprintf(fp, "%lu %f\n", i, s0);
   }
   free(n);
@@ -813,4 +848,121 @@ bool plot_wave(void) {
   // pp=tmp;
   pclose(pp);
   return true;
+}
+
+/* version 1 */
+/* rule is little bit different.
+ *
+ *
+ *
+ */
+
+typedef struct Node1      Node1;
+typedef struct List1      List1;
+typedef struct Chunk1     Chunk1;
+typedef struct MonoMusic1 MonoMusic1;
+
+struct Chunk1 {
+  /* 0 absolute
+   * +1 or -1 relative */
+  int    sign;
+  double value;
+};
+
+typedef struct Var1 Var1;
+struct Var1 {
+  Node1* head;
+};
+
+typedef enum { NODE, VAR1 } Node1Type;
+
+struct Node1 {
+  Node1Type type;
+  union {
+    Var1* var;
+    struct {
+      Chunk1 w;
+      Chunk1 m;
+      Chunk1 v;
+      Chunk1 s;
+      Chunk1 l;
+      Chunk1 t;
+      Chunk1 p;
+    };
+  };
+};
+
+// Var1* Var1Insert(Var1* var, Node1* node) {
+//  Var1* next = malloc(sizeof(Var1));
+//  if (next == NULL) {
+//    return NULL;
+//  }
+//  next->node = node;
+//  if (var == NULL) {
+//    next->next = NULL;
+//    return next;
+//  } else {
+//    next->next = var->next;
+//    var->next  = next;
+//  }
+//  return next;
+//}
+//
+// void Var1Free(Var1* var) {
+//  if (var == NULL) {
+//    return;
+//  }
+//  Var1* next = var->next;
+//  free(var);
+//  Var1Free(next);
+//}
+
+struct List1 {
+  List1* next;
+  Var1*  var;
+};
+
+List1* List1Insert(List1* l, Var1* var) {
+  List1* next = malloc(sizeof(List1));
+  if (next == NULL) {
+    return NULL;
+  }
+  next->var = var;
+  if (l == NULL) {
+    next->next = NULL;
+    return next;
+  } else {
+    next->next = l->next;
+    l->next    = next;
+  }
+  return next;
+}
+
+void List1Free(List1* l) {
+  if (l == NULL) {
+    return;
+  }
+  List1* next = l->next;
+  Var1*  var  = l->var;
+  if (var != NULL) {
+    // Var1Free(var);
+    return;
+  }
+  free(l);
+  List1Free(next);
+}
+
+struct MonoMusic1 {
+  size_t sampling_freq;
+  size_t max_volume;
+  List1* head;
+  List1* tail;
+};
+
+// void MonoMusic1Parse(FILE* fp, size_t sampling_freq) {
+//}
+
+void MonoMusic1Free(MonoMusic1* mm) {
+  List1Free(mm->head);
+  free(mm);
 }

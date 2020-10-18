@@ -3,7 +3,7 @@ CC=gcc
 #CFLAGS=-std=c17 -g -O0 -Wall -Wextra -pedantic -I./
 CFLAGS=-g -O2 -Wall -Wextra -pedantic -I./
 
-LDFLAGS=-lm
+LDFLAGS=-lm -lasound
 
 SRC=$(wildcard *.c)
 
@@ -36,5 +36,5 @@ clean:
 	\rm -rf $(OBJ)
 
 run:$(PROJECT)
-	./$(PROJECT)
+	padsp ./$(PROJECT) -i sample_canon.mono
 
