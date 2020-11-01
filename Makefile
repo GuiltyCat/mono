@@ -1,9 +1,9 @@
 CC=gcc
 
 #CFLAGS=-std=c17 -g -O0 -Wall -Wextra -pedantic -I./
-CFLAGS=-g -O2 -Wall -Wextra -pedantic -I./
+CFLAGS=-g -O0 -Wall -Wextra -pedantic -I./
 
-LDFLAGS=-lm -lasound
+LDFLAGS=-lm -lasound -lncurses
 
 SRC=$(wildcard *.c)
 

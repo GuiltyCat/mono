@@ -200,15 +200,16 @@ int WavWrite(FILE* fp, Wav* wav) {
 /*
  * one sound is composed with these parameter below.
  *
- * w[0-2]     : kinds of wave.
- * m{+-}<num> : one of wave parameter. Set middle point of pulse wave and
- * triangle wave. s{+-}<num> : start time. default num is 0. + starts from
- * previous sound's start. - starts from -<num> of previous sound's end. l<num>
- * : length of sound v<num>     : volume of sound 0(min) to 1(max) t{+-}<num> :
- * + continues sound <num> length. - continues sound (length - <num>) length.
- * p<num>     : frequency of sound
+ * w[0-2]            : kinds of wave.
+ * m{+-}<num>        : one of wave parameter. Set middle point of pulse wave and triangle wave.
+ * s{+-}<num>        : start time. Default num is 0. + starts from previous sound's start.
+ *                   : - starts from -<num> of previous sound's end.
+ * l<num>            : length of sound
+ * v<num>            : volume of sound 0(min) to 1(max)
+ * t{+-}<num>        : + continues sound <num> length. - continues sound (length - <num>) length.
+ * p<num>            : frequency of sound
  * [a-gA-G][0-9][b#] : frequency of sound. b is flat # is sharp.
- * [><][0-9]  : shift <num> from previous sound frequency. < is down. > is up.
+ * [><][0-9]         : shift <num> from previous sound frequency. < is down. > is up.
  *
  * if some parameters are omitted, previous sound parameter is used or
  * automatically completed. For example, if s is omitted, s is set as previous
@@ -220,37 +221,6 @@ int WavWrite(FILE* fp, Wav* wav) {
  * w0s0v.1l1t-0.02m.5p440,<1,<1,<1
  *
  */
-
-typedef struct Node0 Node0;
-typedef struct List0 List0;
-struct Node0 {
-  /* all value is converted to integer by sampling freq */
-  size_t start;      /* absolute */
-  size_t lcm_period; /* absolute */
-  // size_t deno_period; /* absolute */
-  double freq; /* absolute */
-  // size_t period; /* absolute */
-  size_t length; /* absolute */
-  double volume; /* absolute */
-  size_t i;      /* index for next */
-  // size_t midway; /* used for pulse wave */
-  double midway; /* used for pulse wave */
-  size_t till;   /* sec */
-  double (*wave)(Node0* node, size_t sampling_freq);
-};
-
-struct List0 {
-  /* all node should be ordered by start */
-  List0* next;
-  Node0* node;
-};
-
-struct MonoMusic0 {
-  size_t sampling_freq;
-  size_t max_volume;
-  List0* head;
-  List0* tail;
-};
 
 int get_next(FILE* fp) {
   for (;;) {
@@ -420,14 +390,6 @@ int key_value(char key) {
       return -1;
   }
 }
-
-typedef struct {
-  double value;
-  /* +1 means relative +
-   * 0 means absolute
-   * -1  means relative - */
-  int sign;
-} Chunk0;
 
 int read_sign(FILE* fp) {
   int c = get_next(fp);
@@ -853,13 +815,100 @@ bool plot_wave(void) {
 /* version 1 */
 /* rule is little bit different.
  *
+ * 
+ *
+ * r<num>            : reference pitch of A8.
+ * w[0-2]            : kinds of wave.
+ * m{+-}<num>        : one of wave parameter. Set middle point of pulse wave and triangle wave.
+ * s{+-}<num>        : start time. Default num is 0. + starts from previous sound's start.
+ *                   : - starts from -<num> of previous sound's end.
+ * l<num>            : length of sound
+ * v<num>            : volume of sound 0(min) to 1(max)
+ * t{+-}<num>        : + continues sound <num> length. - continues sound (length - <num>) length.
+ * p<num>            : frequency of sound
+ * [a-gA-G][0-9][b#] : frequency of sound. b is flat # is sharp.
+ * [><][0-9]         : shift <num> from previous sound frequency. < is down. > is up.
+ *
+ * Available Command (Basic)
+ *
+ * o : Oscillator and low frequency oscillator
+ *   : s : sine
+ *   : p : pulse with parameter m.
+ *   : t : triangle wave with parameter m.
+ *
+ *   : d : depth (amplitude)
+ *   : r : rate (frequency)
+ *
+ * a : Amp 
+ *   : v : maximum volume
+ *
+ * e : envelope generator
+ *   : a : attack time [pulse]. Time to reach max volume
+ *   : d : decay time [pulse]. Time to reach sustain volume.
+ *   : s : sustain level. 
+ *   : r : release time [pulse]. Time to continue after end of pulse.
+ *
+ * f : Filter
+ *   : c : cutoff
+ *   : r : resonance
+ *   
+ *
+ * t : Time
+ *   : p : one pulse length [sec]
+ *   : s : start pulse [pulse]
+ *   : d : duration [pulse]. (t in version 0)
+ *   : n : note value [pulse]. (l in version 0)
+ *
+ * p : Pitch ???
+ *   : p : pitch
+ *
+ *
+ *
+ * Complex
+ *
+ * a
+ * b
+ * c
+ * e
+ * f
+ * g
+ * h
+ * j
+ * k
+ * m
+ * n 
+ * o
+ * p
+ * q
+ * r
+ * t : 
+ * v
+ * w
+ * x
+ * y
+ * z
+ *
+ * Shortcut
+ *
+ * a
+ * b
+ * c
+ * d
+ * e
+ * f
+ * g
+ *
+ * 
+ *
+ *
  *
  *
  */
 
 typedef struct Node1      Node1;
-typedef struct List1      List1;
 typedef struct Chunk1     Chunk1;
+typedef struct Var1       Var1;
+typedef struct List1      List1;
 typedef struct MonoMusic1 MonoMusic1;
 
 struct Chunk1 {
@@ -869,7 +918,6 @@ struct Chunk1 {
   double value;
 };
 
-typedef struct Var1 Var1;
 struct Var1 {
   Node1* head;
 };

@@ -3,8 +3,6 @@
 #include "mono_image.h"
 #include "mono_music.h"
 
-//#define eprintf( ...) fprintf(stderr,  __VA_ARGS__)
-
 typedef struct {
   FILE* input;
   FILE* output;
@@ -100,17 +98,14 @@ bool parse_args(int argc, char* argv[], Args* args) {
   return true;
 }
 
-bool plot_wave(void);
-#ifdef __linux__
-
-/* https://www.alsa-project.org/alsa-doc/alsa-lib/_2test_2pcm_min_8c-example.html */
+/* https://www.alsa-project.org/alsa-doc/alsa-lib/ */
 #include <alsa/asoundlib.h>
 int play_music(Wav* wav) {
-  int err;
-
+  int               err;
   snd_pcm_t*        handle;
   snd_pcm_sframes_t frames;
-  err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+  //err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
+  err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, SND_PCM_ASYNC);
   if (err < 0) {
     perror("snd_pcm_open failed.");
     PRINT_DEBUG("%s\n", snd_strerror(err));
@@ -133,7 +128,7 @@ int play_music(Wav* wav) {
 
   frames = snd_pcm_writei(handle, wav->signal, wav->length);
   if (frames < 0) {
-	  frames = snd_pcm_recover(handle, frames, 0);
+    frames = snd_pcm_recover(handle, frames, 0);
   }
   if (frames < 0) {
     perror("snd_pcm_writei failed.");
@@ -155,13 +150,149 @@ int play_music(Wav* wav) {
   }
   return 0;
 }
+#include <ncurses.h>
+#include <unistd.h>
 
-#endif
+int keymap(int c) {
+  switch (c) {
+    /* b4 */
+    case 'z': return 1;
+    /* c5 */
+    case 'x': return 2;
+    /* c5# == d5b */
+    case 'd': return 3;
+    /* d5 */
+    case 'c': return 4;
+    /* d5# == e5b */
+    case 'f': return 5;
+    /* e5 == f5b */
+    case 'v': return 6;
+    /* f5 == e5# */
+    case 'b': return 7;
+    /* f5# == g5b */
+    case 'h': return 8;
+    /* g5 */
+    case 'n': return 9;
+    /* g5# == a5b */
+    case 'j': return 10;
+    /* a5 */
+    case 'm': return 11;
+    /* a5# == b5b */
+    case 'k': return 12;
+    /* b5 */
+    case ',': return 13;
+    default: return -1;
+  }
+}
 
-Wav* MonoMusic02Wav(MonoMusic0* mm0);
-int  main(int argc, char* argv[]) {
-  // plot_wave();
-  // return 0;
+int keyboard_player(void) {
+  double A4         = 440;
+  size_t max_volume = INT16_MAX;
+
+  size_t sampling_freq    = 44100;
+  size_t one_sound_length = sampling_freq;
+  Wav*   wav              = WavInit(one_sound_length, sampling_freq);
+  if (wav == NULL) {
+    PRINT_DEBUG("WavInit failed.\n");
+    return -1;
+  }
+
+  /* prepare alsa */
+  int               err;
+  snd_pcm_t*        handle;
+  snd_pcm_sframes_t frames;
+  err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+  if (err < 0) {
+    perror("snd_pcm_open failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+
+  int          soft_resample = 1;      /* allow resampling */
+  unsigned int latency       = 500000; /* 0.5 [sec] */
+
+  err = snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE,
+                           SND_PCM_ACCESS_RW_INTERLEAVED, wav->nchannel,
+                           wav->sampling_freq, soft_resample, latency);
+  if (err < -1) {
+    perror("snd_pcm_set_params failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+
+  /* prepare ncurses */
+  initscr();
+  noecho();
+  cbreak();
+  //timeout(0);
+
+  /* read keyboard and write to alsa */
+  int c = 0;
+  for (;;) {
+    c = getch();
+
+    if (c == 'q') {
+      break;
+    }
+    c = keymap(c);
+    if (c < -1) {
+      continue;
+    }
+
+    double freq                 = base_freq_equal_temptation(c, A4);
+    Chunk0 chunk[7]             = {0};
+    chunk[key_value('s')].value = 0;
+    chunk[key_value('p')].value = freq;
+    chunk[key_value('l')].value = one_sound_length;
+    chunk[key_value('v')].value = 0.2;
+    chunk[key_value('m')].value = 0.5;
+    chunk[key_value('t')].value = one_sound_length;
+    chunk[key_value('w')].value = 0;
+
+    Node0* node = Node0InitChunk0(chunk, wav->sampling_freq, max_volume);
+    for (size_t i = 0; i < wav->length; i++) {
+		//printf("%lu\n",i);
+      wav->signal[i] = Node0Next(node, wav->sampling_freq);
+    }
+    free(node);
+
+	printf("ok %lu\n",wav->length);
+    frames = snd_pcm_writei(handle, wav->signal, wav->length);
+	//sleep(1);
+	(void)frames;
+    // if (frames < 0) {
+    //   frames = snd_pcm_recover(handle, frames, 0);
+    // }
+    // if (frames < 0) {
+    //   perror("snd_pcm_writei failed.");
+    //   PRINT_DEBUG("%s\n", snd_strerror(err));
+	//   break;
+    //   //return -1;
+    // }
+  }
+
+  /* close ncurses */
+  endwin();
+
+  /* close alsa */
+  err = snd_pcm_drain(handle);
+  if (err < 0) {
+    perror("snd_pcm_drain failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+  err = snd_pcm_close(handle);
+  if (err < 0) {
+    perror("snd_pcm_close failed.");
+    PRINT_DEBUG("%s\n", snd_strerror(err));
+    return -1;
+  }
+  return 0;
+}
+
+int main(int argc, char* argv[]) {
+ // keyboard_player();
+ // return 0;
   Args args = {.input = stdin, .output = stdout, .A4 = 440, .bpm = 60};
   if (parse_args(argc, argv, &args) == false) {
     return 0;
@@ -179,6 +310,7 @@ int  main(int argc, char* argv[]) {
     Wav* wav = MonoMusic02Wav(mm0);
     play_music(wav);
     WavFree(wav);
+    PRINT_ERROR("player mode is disabled.\n");
   } else {
     MonoMusic0Wav(args.output, mm0);
   }
