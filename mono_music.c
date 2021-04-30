@@ -813,9 +813,28 @@ bool plot_wave(void) {
 }
 
 /* version 1 */
-/* rule is little bit different.
+/*
+ * More theoretical and recursive.
  *
- * 
+ * wave had three parameter
+ * - a : Amplitude
+ * - f : Frequency
+ * - w : wave types
+ * - t : Time
+ *
+ * Fundamental wave types are
+ * - Sine wave
+ * - Triangle wave
+ * - Pulse wave   
+ * These fundamental waves takes only constant parameter at last.
+ *
+ *
+ * All of these are also wave.
+ *
+ *
+ *
+ */
+/* rule is little bit different.
  *
  * r<num>            : reference pitch of A8.
  * w[0-2]            : kinds of wave.
@@ -828,6 +847,8 @@ bool plot_wave(void) {
  * p<num>            : frequency of sound
  * [a-gA-G][0-9][b#] : frequency of sound. b is flat # is sharp.
  * [><][0-9]         : shift <num> from previous sound frequency. < is down. > is up.
+ *
+ * This is not theoretical.
  *
  * Available Command (Basic)
  *
@@ -884,26 +905,26 @@ bool plot_wave(void) {
  * t : 
  * v
  * w
- * x
- * y
- * z
- *
- * Shortcut
- *
- * a
- * b
- * c
- * d
- * e
- * f
- * g
- *
- * 
- *
- *
- *
- *
- */
+* x
+* y
+* z
+*
+* Shortcut
+*
+* a
+* b
+* c
+* d
+* e
+* f
+* g
+*
+* 
+*
+*
+*
+*
+*/
 
 typedef struct Node1      Node1;
 typedef struct Chunk1     Chunk1;
@@ -912,32 +933,32 @@ typedef struct List1      List1;
 typedef struct MonoMusic1 MonoMusic1;
 
 struct Chunk1 {
-  /* 0 absolute
-   * +1 or -1 relative */
-  int    sign;
-  double value;
+	/* 0 absolute
+	 * +1 or -1 relative */
+	int    sign;
+	double value;
 };
 
 struct Var1 {
-  Node1* head;
+	Node1* head;
 };
 
 typedef enum { NODE, VAR1 } Node1Type;
 
 struct Node1 {
-  Node1Type type;
-  union {
-    Var1* var;
-    struct {
-      Chunk1 w;
-      Chunk1 m;
-      Chunk1 v;
-      Chunk1 s;
-      Chunk1 l;
-      Chunk1 t;
-      Chunk1 p;
-    };
-  };
+	Node1Type type;
+	union {
+		Var1* var;
+		struct {
+			Chunk1 w;
+			Chunk1 m;
+			Chunk1 v;
+			Chunk1 s;
+			Chunk1 l;
+			Chunk1 t;
+			Chunk1 p;
+		};
+	};
 };
 
 // Var1* Var1Insert(Var1* var, Node1* node) {
@@ -966,51 +987,51 @@ struct Node1 {
 //}
 
 struct List1 {
-  List1* next;
-  Var1*  var;
+	List1* next;
+	Var1*  var;
 };
 
 List1* List1Insert(List1* l, Var1* var) {
-  List1* next = malloc(sizeof(List1));
-  if (next == NULL) {
-    return NULL;
-  }
-  next->var = var;
-  if (l == NULL) {
-    next->next = NULL;
-    return next;
-  } else {
-    next->next = l->next;
-    l->next    = next;
-  }
-  return next;
+	List1* next = malloc(sizeof(List1));
+	if (next == NULL) {
+		return NULL;
+	}
+	next->var = var;
+	if (l == NULL) {
+		next->next = NULL;
+		return next;
+	} else {
+		next->next = l->next;
+		l->next    = next;
+	}
+	return next;
 }
 
 void List1Free(List1* l) {
-  if (l == NULL) {
-    return;
-  }
-  List1* next = l->next;
-  Var1*  var  = l->var;
-  if (var != NULL) {
-    // Var1Free(var);
-    return;
-  }
-  free(l);
-  List1Free(next);
+	if (l == NULL) {
+		return;
+	}
+	List1* next = l->next;
+	Var1*  var  = l->var;
+	if (var != NULL) {
+		// Var1Free(var);
+		return;
+	}
+	free(l);
+	List1Free(next);
 }
 
 struct MonoMusic1 {
-  size_t sampling_freq;
-  size_t max_volume;
-  List1* head;
-  List1* tail;
+	size_t sampling_freq;
+	size_t max_volume;
+	List1* head;
+	List1* tail;
 };
 
 // void MonoMusic1Parse(FILE* fp, size_t sampling_freq) {
 //}
 
 void MonoMusic1Free(MonoMusic1* mm) {
-  List1Free(mm->head);
-  free(mm);
+	List1Free(mm->head);
+	free(mm);
 }

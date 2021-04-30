@@ -1,25 +1,11 @@
 #ifndef MONO_MUSIC_H_
 #define MONO_MUSIC_H_
 #include <stdbool.h>
+#include <debug.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef DEBUG
-#define eprintf(...) fprintf(stderr, __VA_ARGS__)
-#define PRINT_ERROR(...)                                            \
-  fprintf(stderr, "error:%s:%s:%d:", __FILE__, __func__, __LINE__); \
-  fprintf(stderr, __VA_ARGS__)
-#define PRINT_DEBUG(...)                                            \
-  fprintf(stderr, "debug:%s:%s:%d:", __FILE__, __func__, __LINE__); \
-  fprintf(stderr, __VA_ARGS__)
-#else
-#include <assert.h>
-#define eprintf(...)     (void)(0)
-#define PRINT_ERROR(...) (void)(0)
-#define PRINT_ERROR(...) (void)(0)
-
-#endif
 
 double base_freq_equal_temptation(int num, double A4);
 int    key_value(char key);
