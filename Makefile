@@ -36,5 +36,6 @@ clean:
 	\rm -rf $(OBJ)
 
 run:$(PROJECT)
+	#padsp ./$(PROJECT) -i sample_music.mono
 	padsp ./$(PROJECT) -i sample_canon.mono
 
