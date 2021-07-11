@@ -1,7 +1,7 @@
 #ifndef MONO_MUSIC_H_
 #define MONO_MUSIC_H_
 #include <stdbool.h>
-#include <debug.h>
+#include "debug.h"
 
 #include <stdint.h>
 #include <stdio.h>
