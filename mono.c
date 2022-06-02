@@ -1,6 +1,6 @@
 #define DEBUG
 #include <math.h>
-#include "mono_image.h"
+//#include "mono_image.h"
 #include "mono_music.h"
 
 typedef struct {
